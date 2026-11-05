@@ -2137,6 +2137,9 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
     }
   }, [initialProjectId, initialViewScope]);
 
+  // 背景展示模式：静态高清底图(默认恢复原版静态页面) 或 3D动态孪生
+  const [use3dBackground, setUse3dBackground] = useState<boolean>(false);
+
   // 选中的造船项目3D模型层次 (如底舱、中舱、甲板等轮船分层信息)
   const [selectedModelLevel, setSelectedModelLevel] = useState<ShipModelLevel>('all');
   const [showModelLevelMenu, setShowModelLevelMenu] = useState(false);
@@ -2515,28 +2518,57 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
       className="fixed inset-0 z-50 bg-[#020b14] text-[#e2f1ff] overflow-hidden flex flex-col font-sans select-none"
     >
       
-      {/* 1. 3D 实时数字孪生驾驶舱建模场景 (支持厂区全景与船舶分层交互透视) */}
-      <div 
-        className="absolute inset-0 z-0 overflow-hidden bg-[#020b14] pointer-events-auto"
-      >
-        <Shipyard3DScene
-          viewScope={viewScope}
-          projectId={currentProject.id}
-          selectedModelLevel={selectedModelLevel}
-          onBackgroundClick={handleBackgroundClick}
-          className="w-full h-full"
-        />
-        {/* 造船项目视角专属的科幻光栅与蓝图微光覆层 */}
-        {viewScope === 'project' && (
-          <div className="absolute inset-0 bg-gradient-to-t from-[#020b14]/75 via-transparent to-[#020b14]/30 pointer-events-none"></div>
-        )}
-      </div>
+      {/* 1. 全画幅静态背景底图 (厂区视角为宽屏鸟瞰总图 /assets/shipyard_wide_bg.jpg，船舶项目视角为高精度船型三维外观图；默认恢复原版静态页面) */}
+      {use3dBackground ? (
+        <div 
+          className="absolute inset-0 z-0 overflow-hidden bg-[#020b14] pointer-events-auto"
+        >
+          <Shipyard3DScene
+            viewScope={viewScope}
+            projectId={currentProject.id}
+            selectedModelLevel={selectedModelLevel}
+            onBackgroundClick={handleBackgroundClick}
+            className="w-full h-full"
+          />
+          {viewScope === 'project' && (
+            <div className="absolute inset-0 bg-gradient-to-t from-[#020b14]/75 via-transparent to-[#020b14]/30 pointer-events-none"></div>
+          )}
+        </div>
+      ) : (
+        <div 
+          onClick={handleBackgroundClick}
+          className="absolute inset-0 z-0 overflow-hidden bg-[#020b14] pointer-events-auto cursor-pointer"
+          title="点击空白背景可切换两侧数据面板显隐"
+        >
+          {/* 原版静态高清背景图片 (使用宽屏鸟瞰大图及各船型三维外观图) */}
+          <img 
+            src={currentBackgroundImage} 
+            alt={viewScope === 'yard' ? '船厂全景鸟瞰总图' : `${currentProject.name} 三维效果图`} 
+            className="w-full h-full object-cover select-none pointer-events-none transition-opacity duration-500"
+            draggable={false}
+          />
+          {/* 工业科技微光深色遮罩，提升前景图表与标定点的对比度与清晰度 */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#020b14]/85 via-[#020b14]/40 to-[#020b14]/65 pointer-events-none" />
+          {/* 微弱科技网格扫描线覆层 */}
+          <div 
+            className="absolute inset-0 opacity-20 pointer-events-none"
+            style={{
+              backgroundImage: 'linear-gradient(rgba(0,210,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,210,255,0.06) 1px, transparent 1px)',
+              backgroundSize: '40px 40px'
+            }}
+          />
+          {/* 造船项目视角专属的科幻蓝图微光覆层 */}
+          {viewScope === 'project' && (
+            <div className="absolute inset-0 bg-gradient-to-t from-[#020b14]/75 via-transparent to-[#020b14]/30 pointer-events-none"></div>
+          )}
+        </div>
+      )}
 
       {/* ===================== 全画幅空间矢量标定图层 (全屏百分比对齐背景图) ===================== */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-20">
         
-        {/* 🎯 造船项目视角下若选择了特定模型分层，显示在顶部视图切换栏下方的半透明科技风层级指示HUD (避免被视图切换遮挡，同时居于顶部中轴线正下方) */}
-        {viewScope === 'project' && selectedModelLevel !== 'all' && (
+        {/* 🎯 仅在启用3D且选择特定模型分层时显示层级指示HUD */}
+        {use3dBackground && viewScope === 'project' && selectedModelLevel !== 'all' && (
           <div className="absolute top-[90px] left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-3 bg-[#061833]/92 border border-[#00e5ff]/80 px-4 py-1.5 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.8),0_0_20px_rgba(0,229,255,0.4)] backdrop-blur-md animate-fadeIn select-none">
             <span 
               className="w-2.5 h-2.5 rounded-full shrink-0 animate-pulse"
@@ -4303,8 +4335,34 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
               </span>
             </div>
 
-            {/* 0. 模型分层 (仅在造船项目视角 viewScope === 'project' 时显示) */}
-            {viewScope === 'project' && (
+            {/* 0. 背景模式切换按钮：静态页面(默认) / 3D孪生 */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setUse3dBackground(prev => !prev);
+              }}
+              className={`w-full px-2 py-1.5 rounded-xl border text-xs flex items-center justify-between gap-1 cursor-pointer transition-all duration-200 ${
+                use3dBackground
+                  ? 'bg-gradient-to-r from-[#00d2ff]/25 to-[#0b2447]/90 border-[#00d2ff] text-white shadow-[0_0_12px_rgba(0,210,255,0.25)]' 
+                  : 'bg-[#0b2447]/40 border-[#1f4a7c]/60 text-[#8ab4f8] hover:border-[#00d2ff]/60 hover:text-white'
+              }`}
+              title={use3dBackground ? "当前为3D数字孪生，点击恢复原版静态页面背景" : "当前为原版静态页面背景，点击体验3D数字孪生"}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className={`w-3.5 h-3.5 shrink-0 ${use3dBackground ? 'text-[#00e5ff]' : 'text-[#8ab4f8]'}`} />
+                <div className="flex flex-col text-left min-w-0">
+                  <span className="font-medium whitespace-nowrap text-[11px] leading-tight">背景模式</span>
+                  <span className="text-[9px] text-[#00e5ff] font-bold truncate max-w-[54px]">
+                    {use3dBackground ? '3D孪生' : '静态页面'}
+                  </span>
+                </div>
+              </div>
+              <div className={`w-2 h-2 rounded-full shrink-0 ${use3dBackground ? 'bg-[#00e676] shadow-[0_0_6px_#00e676]' : 'bg-[#00e5ff]'}`} />
+            </button>
+
+            {/* 0-1. 模型分层 (仅在造船项目视角 viewScope === 'project' 且开启3D孪生时显示) */}
+            {use3dBackground && viewScope === 'project' && (
               <button
                 type="button"
                 onClick={(e) => {
