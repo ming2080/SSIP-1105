@@ -17,6 +17,7 @@ import {
 import { AlarmEventRecord, AlarmAttachment } from '@/src/types/alarmRecord';
 import { MobileUserInfo } from './MobileAuthView';
 import { MobileProcessSubmitParams } from '@/src/data/alarmStorage';
+import { MobileAlarmTrendCard } from './MobileAlarmTrendCard';
 
 interface MobileAlarmProcessViewProps {
   alarmRecord: AlarmEventRecord;
@@ -198,6 +199,11 @@ export function MobileAlarmProcessView({
 
       {/* 主体核心表单内容 */}
       <div className="px-4 py-3 space-y-3 max-w-md mx-auto w-full">
+
+        {/* 0. 待处理告警趋势与近7天处置完成率折线图（为管理层提供宏观把控） */}
+        <MobileAlarmTrendCard 
+          pendingTotal={1}
+        />
 
         {/* 1. 告警核心信息 */}
         <div className="bg-white rounded-xl p-3.5 shadow-xs border border-slate-200 space-y-2">

@@ -8,6 +8,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { AlarmEventRecord } from '@/src/types/alarmRecord';
+import { MobileAlarmTrendCard } from './MobileAlarmTrendCard';
 
 export interface MobileUserInfo {
   name: string;
@@ -293,7 +294,12 @@ export function MobileAuthView({ onLoginSuccess }: MobileAuthViewProps) {
 
       </div>
 
-      <div className="h-6" />
+      {/* 底部管理层概览：近 7 天待处理告警趋势与完成率统计图 */}
+      <div className="px-4 pb-6 mt-1">
+        <MobileAlarmTrendCard 
+          pendingTotal={3}
+        />
+      </div>
 
     </div>
   );

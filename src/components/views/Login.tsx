@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, 
   Lock, 
@@ -12,6 +12,32 @@ interface LoginProps {
   onLogin: (userInfo?: { username: string; role: string; name: string }) => void;
 }
 
+// 智慧船厂现场 IoT 传感器与数字孪生空间节点配置
+interface DataNode {
+  id: string;
+  label: string;
+  code: string;
+  baseX: number; // 0 - 100 比例
+  baseY: number; // 0 - 100 比例
+  depth: number; // 视差位移乘数
+  floatPhase: number;
+  floatSpeed: number;
+  size: number;
+  color: string;
+  status: 'active' | 'synced' | 'online';
+}
+
+const SHIPYARD_DATA_NODES: DataNode[] = [
+  { id: 'n1', label: '1号船坞·三维基站', code: 'UWB-DK01', baseX: 16, baseY: 22, depth: 28, floatPhase: 0, floatSpeed: 0.0012, size: 5, color: '#0284c7', status: 'online' },
+  { id: 'n2', label: '2号龙门吊·风速载荷', code: 'CRANE-T800', baseX: 34, baseY: 15, depth: 36, floatPhase: 1.8, floatSpeed: 0.0016, size: 4, color: '#06b6d4', status: 'synced' },
+  { id: 'n3', label: 'H1851A·双层底压载舱', code: 'CONF-T04', baseX: 44, baseY: 38, depth: 45, floatPhase: 3.2, floatSpeed: 0.0014, size: 5, color: '#3b82f6', status: 'active' },
+  { id: 'n4', label: '机舱主柴油机台位', code: 'MCR-E01', baseX: 12, baseY: 72, depth: 22, floatPhase: 4.1, floatSpeed: 0.0011, size: 4, color: '#0ea5e9', status: 'online' },
+  { id: 'n5', label: '涂装车间·VOC气体监测', code: 'GAS-P08', baseX: 52, baseY: 80, depth: 32, floatPhase: 2.4, floatSpeed: 0.0015, size: 4, color: '#0284c7', status: 'synced' },
+  { id: 'n6', label: '数字化调度指挥中枢', code: 'RTK-HQ', baseX: 78, baseY: 14, depth: 40, floatPhase: 5.0, floatSpeed: 0.0013, size: 6, color: '#0284c7', status: 'active' },
+  { id: 'n7', label: '3号码头·在建散货船', code: 'AIS-H1890', baseX: 88, baseY: 35, depth: 30, floatPhase: 1.2, floatSpeed: 0.0017, size: 4, color: '#06b6d4', status: 'online' },
+  { id: 'n8', label: '舾装码头·高空防坠落', code: 'SAFE-R09', baseX: 72, baseY: 68, depth: 25, floatPhase: 3.7, floatSpeed: 0.0012, size: 4, color: '#38bdf8', status: 'synced' },
+];
+
 export function Login({ onLogin }: LoginProps) {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('123456');
@@ -19,6 +45,12 @@ export function Login({ onLogin }: LoginProps) {
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // 鼠标位置与平滑插值追踪（生成科技感视差与轻柔流动）
+  const mousePos = useRef({ x: 0.5, y: 0.5 });
+  const smoothMouse = useRef({ x: 0.5, y: 0.5 });
+  const [nodesPosition, setNodesPosition] = useState<{ id: string; x: number; y: number }[]>([]);
+  const animFrameRef = useRef<number | null>(null);
 
   // 减弱动效偏好 (优先读取 localStorage，其次读取系统 prefers-reduced-motion)
   const [reduceMotion] = useState<boolean>(() => {
@@ -39,6 +71,59 @@ export function Login({ onLogin }: LoginProps) {
     if (savedUser) {
       setUsername(savedUser);
     }
+  }, []);
+
+  // 鼠标移动监听与科技数据节点高帧率平滑插值微漂动
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const w = window.innerWidth || 1920;
+      const h = window.innerHeight || 1080;
+      // 归一化为 -0.5 ~ 0.5 之间
+      mousePos.current = {
+        x: (e.clientX / w) - 0.5,
+        y: (e.clientY / h) - 0.5
+      };
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+    let startTime = performance.now();
+    const updateNodes = () => {
+      const now = performance.now();
+      const elapsed = now - startTime;
+
+      // 惯性平滑插值 (Lerp: 0.05 权重) 营造如水下/太空中柔和漂移的视差悬浮感
+      smoothMouse.current.x += (mousePos.current.x - smoothMouse.current.x) * 0.045;
+      smoothMouse.current.y += (mousePos.current.y - smoothMouse.current.y) * 0.045;
+
+      const updated = SHIPYARD_DATA_NODES.map((node) => {
+        // 自主轻柔波形浮动
+        const floatX = Math.sin(node.floatPhase + elapsed * node.floatSpeed) * 8;
+        const floatY = Math.cos(node.floatPhase + elapsed * node.floatSpeed * 1.2) * 8;
+        
+        // 随鼠标移动带来的视差漂动 (结合节点深度 depth)
+        const parallaxX = smoothMouse.current.x * node.depth;
+        const parallaxY = smoothMouse.current.y * node.depth;
+
+        return {
+          id: node.id,
+          x: node.baseX + (parallaxX + floatX) / 16,
+          y: node.baseY + (parallaxY + floatY) / 10
+        };
+      });
+
+      setNodesPosition(updated);
+      animFrameRef.current = requestAnimationFrame(updateNodes);
+    };
+
+    animFrameRef.current = requestAnimationFrame(updateNodes);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
   }, []);
 
   // 提交登录逻辑（严格保留原有业务逻辑）
@@ -96,67 +181,241 @@ export function Login({ onLogin }: LoginProps) {
   return (
     <div className={`relative w-screen h-screen overflow-hidden select-none bg-[#e8f1fa] font-sans flex flex-col justify-between text-slate-800 ${reduceMotion ? 'reduce-motion-active' : ''}`}>
       
-      {/* 1. 背景科技柔光与弧形波浪光带（严格还原效果图中的大弧度流线与电路脉络） */}
+      {/* 1. 丰富宏大的智慧船厂数字化背景：多阶流线波浪、远景造船龙门吊与船坞剪影微光、数字孪生坐标网格、罗盘雷达扫描环与全厂拓扑网络 */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         
-        {/* 左上角大弧度科技光波 */}
+        {/* 底层 1：超细微数字孪生网格坐标系 (微弱蓝灰色，提供工业数字化基底) */}
         <div 
-          className="absolute -top-[15%] -left-[10%] w-[58%] h-[68%] rounded-full opacity-60 pointer-events-none"
+          className="absolute inset-0 opacity-[0.28] pointer-events-none"
           style={{
-            background: 'radial-gradient(circle at 35% 35%, rgba(255,255,255,0.85) 0%, rgba(210,230,250,0.5) 45%, transparent 72%)',
-            filter: 'blur(40px)',
+            backgroundImage: `
+              linear-gradient(to right, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(2, 132, 199, 0.08) 1px, transparent 1px)
+            `,
+            backgroundSize: '48px 48px',
+            maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, #000 30%, transparent 90%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, #000 30%, transparent 90%)'
           }}
         />
 
-        {/* 左下角至底部优雅流线弧形波浪带 */}
+        {/* 底层 2：左上角深海柔和科技光晕 */}
+        <div 
+          className="absolute -top-[18%] -left-[10%] w-[65%] h-[72%] rounded-full opacity-70 pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle at 35% 35%, rgba(255,255,255,0.95) 0%, rgba(214,234,252,0.6) 42%, transparent 75%)',
+            filter: 'blur(45px)',
+          }}
+        />
+
+        {/* 底层 3：右上角微型海事雷达与航向罗盘刻度扫描环 (微光高质感) */}
         <svg 
-          className="absolute bottom-0 left-0 w-[65%] h-[32%] pointer-events-none opacity-70"
-          viewBox="0 0 1000 400" 
+          className="absolute top-[3%] right-[2%] w-[420px] h-[420px] pointer-events-none opacity-30 text-blue-500" 
+          viewBox="0 0 300 300"
           fill="none"
-          preserveAspectRatio="none"
         >
-          <path 
-            d="M -50 180 Q 280 280 580 320 T 1050 400 L 1050 450 L -50 450 Z" 
-            fill="url(#bottomWaveGrad)" 
-            opacity="0.8"
-          />
-          <path 
-            d="M -50 120 Q 240 230 620 280 T 1020 370" 
-            stroke="url(#lineWaveGrad)" 
-            strokeWidth="3.5"
-            opacity="0.5"
-          />
-          <defs>
-            <linearGradient id="bottomWaveGrad" x1="0" y1="200" x2="800" y2="400" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#b6d5f4" stopOpacity="0.75" />
-              <stop offset="0.6" stopColor="#cde2f8" stopOpacity="0.45" />
-              <stop offset="1" stopColor="#e8f1fa" stopOpacity="0.1" />
-            </linearGradient>
-            <linearGradient id="lineWaveGrad" x1="0" y1="120" x2="1000" y2="350" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#93c5fd" stopOpacity="0.8" />
-              <stop offset="1" stopColor="#bae6fd" stopOpacity="0.2" />
-            </linearGradient>
-          </defs>
+          {/* 雷达同心圆 */}
+          <circle cx="150" cy="150" r="140" stroke="currentColor" strokeWidth="1" strokeDasharray="3 5" opacity="0.4" />
+          <circle cx="150" cy="150" r="105" stroke="currentColor" strokeWidth="1" opacity="0.35" />
+          <circle cx="150" cy="150" r="70" stroke="currentColor" strokeWidth="1" strokeDasharray="4 6" opacity="0.4" />
+          <circle cx="150" cy="150" r="35" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+          {/* 十字方位轴 */}
+          <line x1="150" y1="5" x2="150" y2="295" stroke="currentColor" strokeWidth="1" strokeDasharray="2 4" opacity="0.3" />
+          <line x1="5" y1="150" x2="295" y2="150" stroke="currentColor" strokeWidth="1" strokeDasharray="2 4" opacity="0.3" />
+          {/* 45度刻度光标 */}
+          <line x1="51" y1="51" x2="249" y2="249" stroke="currentColor" strokeWidth="0.8" opacity="0.2" />
+          <line x1="51" y1="249" x2="249" y2="51" stroke="currentColor" strokeWidth="0.8" opacity="0.2" />
+          <circle cx="150" cy="150" r="3" fill="currentColor" opacity="0.6" />
         </svg>
 
-        {/* 右上角及全局浅色工业数字拓扑电路光丝与脉冲节点 */}
+        {/* 底层 4：远景造船基地标志性万吨级龙门吊与船坞微光剪影（营造船厂空间安全管控专属氛围） */}
         <svg 
-          className="absolute inset-0 w-full h-full pointer-events-none opacity-45" 
+          className="absolute bottom-[16%] left-[2%] w-[580px] h-[190px] pointer-events-none opacity-[0.22] text-[#0284c7]" 
+          viewBox="0 0 600 200"
+          fill="none"
+        >
+          {/* 远景大跨度造车龙门吊 1 */}
+          <path d="M 60 190 L 85 70 L 220 70 L 245 190" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          <path d="M 50 70 H 255" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" />
+          <path d="M 85 70 L 105 130 H 200 L 220 70" stroke="currentColor" strokeWidth="1.5" opacity="0.6" />
+          <path d="M 152 70 V 125" stroke="currentColor" strokeWidth="1.8" />
+          <rect x="144" y="125" width="16" height="10" rx="2" fill="currentColor" opacity="0.7" />
+          <circle cx="152" cy="65" r="3" fill="#38bdf8" />
+
+          {/* 远景桁架吊车 2 */}
+          <path d="M 280 190 L 295 95 L 390 95 L 405 190" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M 270 95 H 415" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+          <path d="M 342 95 V 140" stroke="currentColor" strokeWidth="1.4" />
+          <rect x="336" y="140" width="12" height="8" rx="1.5" fill="currentColor" opacity="0.6" />
+
+          {/* 在建船舶龙骨线剪影 */}
+          <path d="M 430 190 L 450 155 L 530 155 L 565 170 L 575 190" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <line x1="470" y1="155" x2="470" y2="135" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="500" y1="155" x2="500" y2="130" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+
+        {/* 底层 5：全屏工业物联网拓扑连线与多重感知脉冲节点 */}
+        <svg 
+          className="absolute inset-0 w-full h-full pointer-events-none opacity-55" 
           viewBox="0 0 1440 900" 
           fill="none"
           preserveAspectRatio="xMidYMid slice"
         >
-          <path d="M 850 120 L 1050 120 L 1180 200 H 1380" stroke="#38bdf8" strokeWidth="1.2" strokeDasharray="4 6" opacity="0.65" />
-          <path d="M 1180 200 V 380 L 1260 440" stroke="#0284c7" strokeWidth="1" strokeDasharray="3 5" opacity="0.45" />
-          <path d="M 980 60 L 1100 150 V 280" stroke="#06b6d4" strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
-          <circle cx="1050" cy="120" r="3.5" fill="#38bdf8" opacity="0.85" />
-          <circle cx="1180" cy="200" r="4" fill="#0284c7" opacity="0.8" />
-          <circle cx="1260" cy="440" r="3" fill="#38bdf8" opacity="0.75" />
-          <circle cx="980" cy="60" r="3" fill="#06b6d4" opacity="0.7" />
+          {/* 左侧向右延伸的感知主干 */}
+          <path d="M 60 360 H 240 L 320 440 H 460" stroke="#0284c7" strokeWidth="1.2" strokeDasharray="4 6" opacity="0.45" />
+          <path d="M 180 220 V 320 L 240 380 V 540" stroke="#38bdf8" strokeWidth="1" strokeDasharray="3 5" opacity="0.4" />
+          
+          {/* 右侧管控中心网络 */}
+          <path d="M 820 100 L 980 100 L 1090 180 H 1280 L 1380 250" stroke="#38bdf8" strokeWidth="1.4" strokeDasharray="5 7" opacity="0.65" />
+          <path d="M 1090 180 V 340 L 1190 410 V 580" stroke="#0284c7" strokeWidth="1.2" strokeDasharray="4 5" opacity="0.5" />
+          <path d="M 1280 180 L 1360 120" stroke="#06b6d4" strokeWidth="1.2" strokeDasharray="3 4" opacity="0.4" />
+          <path d="M 940 45 L 1040 125 V 240" stroke="#0ea5e9" strokeWidth="1" strokeDasharray="4 4" opacity="0.35" />
+
+          {/* 活跃感知传感器节点（带发光圆环） */}
+          <g>
+            <circle cx="980" cy="100" r="4" fill="#38bdf8" />
+            <circle cx="980" cy="100" r="7" stroke="#38bdf8" strokeWidth="1" opacity="0.6" />
+          </g>
+          <g>
+            <circle cx="1090" cy="180" r="4.5" fill="#0284c7" />
+            <circle cx="1090" cy="180" r="8" stroke="#0284c7" strokeWidth="1" opacity="0.5" />
+          </g>
+          <g>
+            <circle cx="1190" cy="410" r="3.5" fill="#38bdf8" />
+            <circle cx="1190" cy="410" r="6" stroke="#38bdf8" strokeWidth="0.8" opacity="0.5" />
+          </g>
+          <circle cx="1280" cy="180" r="3" fill="#06b6d4" opacity="0.8" />
+          <circle cx="1380" cy="250" r="3" fill="#0284c7" opacity="0.7" />
+          <circle cx="940" cy="45" r="2.5" fill="#38bdf8" opacity="0.75" />
+          <circle cx="240" cy="440" r="3" fill="#0284c7" opacity="0.6" />
+          <circle cx="320" cy="440" r="3" fill="#38bdf8" opacity="0.7" />
         </svg>
 
-        {/* 右侧微光环境漫射 */}
-        <div className="absolute top-[18%] right-[8%] w-[460px] h-[460px] rounded-full bg-blue-400/10 blur-[110px]" />
+        {/* 底层 6：左下角至右侧大跨度层次丰富的流线型波浪光带（层叠3重贝塞尔曲面，波澜壮阔） */}
+        <svg 
+          className="absolute bottom-0 left-0 w-full h-[40%] pointer-events-none"
+          viewBox="0 0 1440 400" 
+          fill="none"
+          preserveAspectRatio="none"
+        >
+          {/* 最底层主海澜弧线 */}
+          <path 
+            d="M -60 210 Q 320 310 720 280 T 1500 370 L 1500 450 L -60 450 Z" 
+            fill="url(#bottomDeepWaveGrad)" 
+            opacity="0.65"
+          />
+          {/* 中间层水动力流线羽翼 */}
+          <path 
+            d="M -60 150 Q 280 250 640 260 T 1480 340 L 1480 450 L -60 450 Z" 
+            fill="url(#bottomMainWaveGrad)" 
+            opacity="0.85"
+          />
+          {/* 表层高光流线切丝 1 */}
+          <path 
+            d="M -60 145 Q 280 245 640 255 T 1480 335" 
+            stroke="url(#highlightLineGrad1)" 
+            strokeWidth="3"
+            opacity="0.65"
+          />
+          {/* 表层次级动感光丝 2 */}
+          <path 
+            d="M -40 100 Q 340 210 760 220 T 1460 310" 
+            stroke="url(#highlightLineGrad2)" 
+            strokeWidth="1.8"
+            strokeDasharray="8 6"
+            opacity="0.5"
+          />
+          
+          <defs>
+            <linearGradient id="bottomDeepWaveGrad" x1="0" y1="210" x2="1200" y2="400" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#a3cbf5" stopOpacity="0.7" />
+              <stop offset="0.5" stopColor="#c5ddf7" stopOpacity="0.45" />
+              <stop offset="1" stopColor="#e8f1fa" stopOpacity="0.1" />
+            </linearGradient>
+            <linearGradient id="bottomMainWaveGrad" x1="0" y1="150" x2="1000" y2="380" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#b9d7f7" stopOpacity="0.8" />
+              <stop offset="0.55" stopColor="#d2e5f9" stopOpacity="0.5" />
+              <stop offset="1" stopColor="#e8f1fa" stopOpacity="0.15" />
+            </linearGradient>
+            <linearGradient id="highlightLineGrad1" x1="0" y1="145" x2="1400" y2="335" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#ffffff" stopOpacity="0.95" />
+              <stop offset="0.3" stopColor="#7dd3fc" stopOpacity="0.85" />
+              <stop offset="0.7" stopColor="#38bdf8" stopOpacity="0.6" />
+              <stop offset="1" stopColor="#93c5fd" stopOpacity="0.15" />
+            </linearGradient>
+            <linearGradient id="highlightLineGrad2" x1="0" y1="100" x2="1400" y2="310" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#38bdf8" stopOpacity="0.8" />
+              <stop offset="0.6" stopColor="#0284c7" stopOpacity="0.5" />
+              <stop offset="1" stopColor="#bae6fd" stopOpacity="0.1" />
+            </linearGradient>
+          </defs>
+        </svg>
+
+        {/* 底层 7：右侧柔和工业光球漫射 */}
+        <div className="absolute top-[22%] right-[5%] w-[480px] h-[480px] rounded-full bg-sky-400/12 blur-[120px]" />
+
+        {/* 核心亮点：随鼠标移动缓慢视差漂动的「智慧船厂科技感数据节点」光效 */}
+        <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
+          {nodesPosition.map((pos) => {
+            const nodeMeta = SHIPYARD_DATA_NODES.find(n => n.id === pos.id);
+            if (!nodeMeta) return null;
+
+            return (
+              <div
+                key={pos.id}
+                className="absolute transition-transform will-change-transform flex items-center gap-2 group select-none pointer-events-none"
+                style={{
+                  left: `${pos.x}%`,
+                  top: `${pos.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                {/* 节点外层多重动态微光发光晕 */}
+                <div className="relative flex items-center justify-center">
+                  {/* 扩散脉冲波纹 */}
+                  <div 
+                    className="absolute rounded-full animate-ping opacity-35"
+                    style={{
+                      width: `${nodeMeta.size * 5}px`,
+                      height: `${nodeMeta.size * 5}px`,
+                      backgroundColor: nodeMeta.color,
+                      animationDuration: '3.5s',
+                    }}
+                  />
+                  {/* 稳定呼吸光晕 */}
+                  <div 
+                    className="absolute rounded-full blur-[3px] opacity-75"
+                    style={{
+                      width: `${nodeMeta.size * 3.5}px`,
+                      height: `${nodeMeta.size * 3.5}px`,
+                      backgroundColor: nodeMeta.color,
+                    }}
+                  />
+                  {/* 核心高亮晶体光点 */}
+                  <div 
+                    className="relative rounded-full shadow-xs"
+                    style={{
+                      width: `${nodeMeta.size * 1.6}px`,
+                      height: `${nodeMeta.size * 1.6}px`,
+                      backgroundColor: '#ffffff',
+                      border: `1.8px solid ${nodeMeta.color}`,
+                    }}
+                  />
+                </div>
+
+                {/* 节点数字化遥测标签（半透明轻盈气泡，展示工业实名与工位编码） */}
+                <div className="hidden md:flex flex-col items-start px-2 py-0.5 rounded-md bg-white/70 backdrop-blur-xs border border-sky-200/60 shadow-2xs text-[10px] leading-tight opacity-75 transition-opacity">
+                  <div className="flex items-center gap-1 font-mono text-[9px] text-sky-700 font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{nodeMeta.code}</span>
+                  </div>
+                  <span className="text-slate-600 font-medium whitespace-nowrap text-[10px]">
+                    {nodeMeta.label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* 2. 中部核心交互区域（与参考图完全一致的双列布局） */}

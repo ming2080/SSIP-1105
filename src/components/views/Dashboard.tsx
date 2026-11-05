@@ -53,6 +53,7 @@ import {
   Tv
 } from 'lucide-react';
 import { ViewType } from '@/src/types';
+import { Shipyard3DScene } from './Shipyard3DScene';
 
 // 设备细分类型定义 (对应设备管理列表4分类: 主基站、气体探测器、声光报警器、摄像头)
 export type DeviceCategoryType = 'all' | 'main_station' | 'gas_detector' | 'alarm' | 'camera';
@@ -2514,22 +2515,20 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
       className="fixed inset-0 z-50 bg-[#020b14] text-[#e2f1ff] overflow-hidden flex flex-col font-sans select-none"
     >
       
-      {/* 1. 3D 全景/船模背景图 (明确设置为 z-0 基层，按页面同高设置尺寸宽屏显示) */}
+      {/* 1. 3D 实时数字孪生驾驶舱建模场景 (支持厂区全景与船舶分层交互透视) */}
       <div 
-        onClick={handleBackgroundClick}
-        className="absolute inset-0 z-0 overflow-hidden flex items-center justify-center bg-[#020b14] pointer-events-auto transition-all duration-700 cursor-pointer"
-        title={isPanelsVisible ? "点击背景空白处可收起所有数据面板" : "点击背景可展开数据面板"}
+        className="absolute inset-0 z-0 overflow-hidden bg-[#020b14] pointer-events-auto"
       >
-        <img 
-          key={currentBackgroundImage}
-          src={currentBackgroundImage} 
-          alt={viewScope === 'yard' ? '智慧船厂全景' : currentProject.name} 
-          className="w-full h-full min-h-screen object-cover object-center select-none animate-fadeIn transition-all duration-700 pointer-events-none"
-          style={{ imageRendering: '-webkit-optimize-contrast' }}
+        <Shipyard3DScene
+          viewScope={viewScope}
+          projectId={currentProject.id}
+          selectedModelLevel={selectedModelLevel}
+          onBackgroundClick={handleBackgroundClick}
+          className="w-full h-full"
         />
         {/* 造船项目视角专属的科幻光栅与蓝图微光覆层 */}
         {viewScope === 'project' && (
-          <div className="absolute inset-0 bg-gradient-to-t from-[#020b14]/70 via-transparent to-[#020b14]/40 pointer-events-none"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#020b14]/75 via-transparent to-[#020b14]/30 pointer-events-none"></div>
         )}
       </div>
 
