@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/* 智慧船厂深色工业大屏动效 */
+@keyframes sweepLight {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes streamlineFlow {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes cardEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fieldStagger {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes breathingGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.45));
+    opacity: 0.95;
+  }
+  50% {
+    filter: drop-shadow(0 0 24px rgba(6, 182, 212, 0.85));
+    opacity: 1;
+  }
+}
+
+.animate-card-entrance {
+  animation: cardEntrance 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-field-stagger-1 {
+  animation: fieldStagger 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.08s forwards;
+  opacity: 0;
+}
+
+.animate-field-stagger-2 {
+  animation: fieldStagger 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.16s forwards;
+  opacity: 0;
+}
+
+.animate-field-stagger-3 {
+  animation: fieldStagger 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.24s forwards;
+  opacity: 0;
+}
+
+.animate-field-stagger-4 {
+  animation: fieldStagger 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.32s forwards;
+  opacity: 0;
+}
+
+.animate-field-stagger-5 {
+  animation: fieldStagger 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.40s forwards;
+  opacity: 0;
+}
+
+.animate-field-stagger-6 {
+  animation: fieldStagger 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.48s forwards;
+  opacity: 0;
+}
+
+.animate-brand-sweep {
+  background: linear-gradient(90deg, #ffffff 0%, #38bdf8 30%, #ffffff 50%, #bae6fd 70%, #ffffff 100%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: sweepLight 5s linear infinite;
+}
+
+.animate-streamline {
+  animation: streamlineFlow 3.5s ease-in-out infinite;
+}
+
+.animate-breathing-logo {
+  animation: breathingGlow 3.6s ease-in-out infinite;
+}
+
+/* 减弱动画适配 */
+.reduce-motion-active,
+.reduce-motion-active * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  opacity: 1 !important;
+  transform: none !important;
+}

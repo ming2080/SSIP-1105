@@ -1,0 +1,8 @@
+{
+  "name": "智慧船厂管理系统-v1.3-1105",
+  "description": "集领导驾驶舱、项目管理、人员定位、电子围栏、告警与设备管理于一体的智慧船厂系统。",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
