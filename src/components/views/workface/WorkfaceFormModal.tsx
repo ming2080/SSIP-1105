@@ -148,7 +148,7 @@ export function WorkfaceFormModal({
   // 基本字段
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [capacityLimit, setCapacityLimit] = useState<number>(15);
+  const [capacityLimit, setCapacityLimit] = useState<number | ''>('');
   
   // 归属区域类型: 船厂厂区 | 建造船模选择 (原造船项目)
   const [belongingType, setBelongingType] = useState<WorkfaceBelongingType>('yard');
@@ -353,7 +353,7 @@ export function WorkfaceFormModal({
       setWorkfaceType(initialData.workfaceType || (initialData.workType === '密闭舱室作业' ? '有限空间' : '通用作业面'));
       setCode(initialData.code);
       setName(initialData.name);
-      setCapacityLimit(initialData.capacityLimit ?? 15);
+      setCapacityLimit(initialData.capacityLimit !== undefined && initialData.capacityLimit !== null ? initialData.capacityLimit : '');
       setBelongingType(initialData.belongingType || (initialData.yardZoneId ? 'yard' : 'project'));
       setYardZoneId(initialData.yardZoneId || SOUTHEAST_SHIPYARD_ZONES[0].id);
       setYardSubAreaId(initialData.yardSubAreaId || SOUTHEAST_SHIPYARD_ZONES[0].subAreas[0].id);
@@ -459,7 +459,7 @@ export function WorkfaceFormModal({
       setWorkfaceType('通用作业面');
       setCode(`WF-AUTO-${randomSeq}`);
       setName('');
-      setCapacityLimit(15);
+      setCapacityLimit('');
       setBelongingType('yard');
       setYardZoneId(SOUTHEAST_SHIPYARD_ZONES[0].id);
       setYardSubAreaId(SOUTHEAST_SHIPYARD_ZONES[0].subAreas[0].id);
@@ -732,8 +732,8 @@ export function WorkfaceFormModal({
       teamLeader: teamLeader.trim(),
       teamLeaderPhone: teamLeaderPhone.trim(),
       
-      // 空间上限人数 (定员上限)
-      capacityLimit: Number(capacityLimit) || 15,
+      // 作业面上限预警人数 (非必填，未填则留空)
+      capacityLimit: capacityLimit !== '' && !isNaN(Number(capacityLimit)) ? Number(capacityLimit) : undefined,
       currentPersonnelCount: initialData ? initialData.currentPersonnelCount : (status === 'active' ? 4 : 0),
       currentPersonnel: initialData ? initialData.currentPersonnel : [],
       boundBaseStations: boundStations,
@@ -835,20 +835,28 @@ export function WorkfaceFormModal({
               />
             </div>
 
-            {/* 空间上限人数 */}
+            {/* 作业面上限预警人数 */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                空间上限人数 (人) <span className="text-red-500">*</span>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span>作业面上限预警人数 (人)</span>
+                <span className="text-[11px] text-slate-400 font-normal">选填</span>
               </label>
               <input
                 type="number"
                 min={1}
                 max={500}
                 value={capacityLimit}
-                onChange={e => setCapacityLimit(Math.max(1, parseInt(e.target.value) || 1))}
-                placeholder="如 15"
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setCapacityLimit('');
+                  } else {
+                    const num = parseInt(val, 10);
+                    setCapacityLimit(isNaN(num) ? '' : Math.max(1, num));
+                  }
+                }}
+                placeholder="可选，超出则触发超员预警"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                required
               />
             </div>
           </div>

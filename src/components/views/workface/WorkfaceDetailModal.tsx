@@ -131,8 +131,10 @@ export function WorkfaceDetailModal({
               </div>
 
               <div>
-                <span className="text-slate-400">空间上限人数：</span>
-                <span className="text-slate-800 font-mono font-bold ml-1">{workface.capacityLimit || 15} 人</span>
+                <span className="text-slate-400">作业面上限预警人数：</span>
+                <span className="text-slate-800 font-mono font-bold ml-1">
+                  {workface.capacityLimit ? `${workface.capacityLimit} 人` : '未设置 (不限)'}
+                </span>
               </div>
 
               <div>

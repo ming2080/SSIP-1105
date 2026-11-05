@@ -320,6 +320,8 @@ export function AlarmConfig({ initialTab }: AlarmConfigProps) {
                                   className={`px-1.5 py-0.5 rounded text-[11px] font-semibold border ${
                                     aType === '有限空间' 
                                       ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                      : aType === '机舱内'
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
                                       : aType === '电子围栏' 
                                       ? 'bg-rose-50 text-rose-700 border-rose-200' 
                                       : 'bg-sky-50 text-sky-700 border-sky-200'

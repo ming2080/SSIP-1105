@@ -9,7 +9,14 @@ export interface AlarmRuleVersion {
     name: string;
     type: string;
     level: '低' | '中' | '高';
-    areaConditions: Array<{ type: string; relation: string; target: string }>;
+    areaConditions: Array<{ 
+      type: string; 
+      relation: string; 
+      target: string;
+      projectId?: string;
+      projectName?: string;
+      selectedTargets?: string[];
+    }>;
     personConditions: Array<{ scope: string; relation: string; target: string }>;
     conditionType: string;
     conditionOperator: string;
@@ -41,7 +48,14 @@ export interface AlarmRuleItem {
   modifiedAt: string;
   createdAt: string;
   // 当前版本激活属性
-  areaConditions: Array<{ type: string; relation: string; target: string }>;
+  areaConditions: Array<{ 
+    type: string; 
+    relation: string; 
+    target: string;
+    projectId?: string;
+    projectName?: string;
+    selectedTargets?: string[];
+  }>;
   personConditions: Array<{ scope: string; relation: string; target: string }>;
   conditionType: string;
   conditionOperator: string;
@@ -72,10 +86,11 @@ export const ALARM_POLICY_TYPES = [
 
 export type AlarmPolicyType = typeof ALARM_POLICY_TYPES[number];
 
-// 区域范围标准枚举选项（严格规范为 3 大空间范围类）
+// 区域范围标准枚举选项（作业面、有限空间、机舱内、电子围栏 4 大空间范围类）
 export const ALARM_AREA_TYPES = [
   '作业面',
   '有限空间',
+  '机舱内',
   '电子围栏'
 ] as const;
 
@@ -816,6 +831,86 @@ export const INITIAL_ALARM_RULES: AlarmRuleItem[] = [
           notifyWays: ['声光报警通知', '发送短信通知'],
           repeatInterval: '重复告警',
           effectivePeriod: '联动【加班登记单】实际作业时段',
+          status: '启用'
+        }
+      }
+    ]
+  },
+  {
+    id: 11,
+    name: 'LNG船机舱动力区重点区域异常滞留告警',
+    type: '异常停留',
+    level: '中',
+    notify: '是',
+    period: '永久',
+    status: '启用',
+    currentVersion: 'V1',
+    modifiedAt: '2026-09-01 10:00:00',
+    createdAt: '2026-09-01 10:00:00',
+    areaConditions: [
+      { 
+        type: '机舱内', 
+        relation: '是', 
+        target: '[17.4万m³ 薄膜型大型LNG船 1号舰] 机舱底层主机曲轴箱作业区、机舱管弄及轴隧狭窄走道',
+        projectId: 'PRJ-2026-LNG01',
+        projectName: '17.4万m³ 薄膜型大型LNG船 1号舰',
+        selectedTargets: ['机舱底层主机曲轴箱作业区', '机舱管弄及轴隧狭窄走道']
+      }
+    ],
+    personConditions: [
+      { scope: '全厂工人', relation: '是', target: '全体施工人员' }
+    ],
+    conditionType: '滞留超时时长',
+    conditionOperator: '大于',
+    conditionValue: 45,
+    notifyTargets: {
+      low: '动力机电施工班长',
+      lowCountdown: '5分钟',
+      mid: '机装车间安全员',
+      midCountdown: '15分钟',
+      high: '船体工程安全主管'
+    },
+    notifyWays: ['声光报警通知', '发送短信通知'],
+    repeatInterval: '重复告警',
+    effectivePeriod: '永久',
+    versions: [
+      {
+        versionId: 'V1',
+        versionNumber: 1,
+        dateStr: '20260901',
+        createdAt: '2026-09-01 10:00:00',
+        modifier: '系统管理员',
+        changeNotes: '新增船舶项目机舱动力区异常滞留多区域监控策略',
+        snapshot: {
+          name: 'LNG船机舱动力区重点区域异常滞留告警',
+          type: '异常停留',
+          level: '中',
+          areaConditions: [
+            { 
+              type: '机舱内', 
+              relation: '是', 
+              target: '[17.4万m³ 薄膜型大型LNG船 1号舰] 机舱底层主机曲轴箱作业区、机舱管弄及轴隧狭窄走道',
+              projectId: 'PRJ-2026-LNG01',
+              projectName: '17.4万m³ 薄膜型大型LNG船 1号舰',
+              selectedTargets: ['机舱底层主机曲轴箱作业区', '机舱管弄及轴隧狭窄走道']
+            }
+          ],
+          personConditions: [
+            { scope: '全厂工人', relation: '是', target: '全体施工人员' }
+          ],
+          conditionType: '滞留超时时长',
+          conditionOperator: '大于',
+          conditionValue: 45,
+          notifyTargets: {
+            low: '动力机电施工班长',
+            lowCountdown: '5分钟',
+            mid: '机装车间安全员',
+            midCountdown: '15分钟',
+            high: '船体工程安全主管'
+          },
+          notifyWays: ['声光报警通知', '发送短信通知'],
+          repeatInterval: '重复告警',
+          effectivePeriod: '永久',
           status: '启用'
         }
       }

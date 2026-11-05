@@ -241,6 +241,8 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
                       <span className={`font-semibold px-2 py-0.5 rounded border text-[11px] ${
                         cond.type === '有限空间'
                           ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : cond.type === '机舱内'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
                           : cond.type === '电子围栏'
                           ? 'bg-rose-50 text-rose-700 border-rose-200'
                           : 'bg-sky-50 text-sky-700 border-sky-200'

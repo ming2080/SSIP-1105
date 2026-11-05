@@ -10,9 +10,121 @@ import {
   Sparkles, 
   Clock, 
   ShieldAlert,
-  BellRing
+  BellRing,
+  Ship,
+  Layers,
+  CheckSquare,
+  Square,
+  ChevronDown
 } from 'lucide-react';
 import { AlarmRuleItem, AlarmRuleVersion, generateVersionId, formatDateTime, ALARM_POLICY_TYPES } from '@/src/data/alarmData';
+import { MOCK_PROJECTS } from '@/src/data/mockProjects';
+
+// 船舶项目与专属有限空间、机舱内区域块数据字典
+export interface ShipProjectAreaItem {
+  id: string;
+  name: string;
+  shipCode: string;
+  confinedSpaces: string[];
+  engineRooms: string[];
+}
+
+export const SHIP_PROJECT_AREAS: Record<string, { name: string; shipCode: string; confinedSpaces: string[]; engineRooms: string[] }> = {
+  'PRJ-2026-LNG01': {
+    name: '17.4万m³ 薄膜型大型LNG船 1号舰',
+    shipCode: 'HULL-LNG-174',
+    confinedSpaces: [
+      '1#液货舱双层底压载舱',
+      'NO.96薄膜型绝热液货舱',
+      '机舱底层动力区集油井',
+      '艏尖隔舱及隔离空舱',
+      '2#货舱绝热隔离空舱',
+      '左舷双层底防倾压载舱',
+      '右舷双层底压载舱',
+      '舵机舱密闭受限区'
+    ],
+    engineRooms: [
+      '机舱底层主机曲轴箱作业区',
+      '机舱一层辅机与发电机平台',
+      '机舱二层燃油供油与分油机间',
+      '机舱管弄及轴隧狭窄走道',
+      '机舱集控室(配电板区域)',
+      '废气锅炉平台及排烟走廊',
+      '机舱底层污水井与集油井',
+      '应急发电机房与蓄电池间'
+    ]
+  },
+  'PRJ-2026-BOX12': {
+    name: '24,000 TEU 超大型集装箱船',
+    shipCode: 'HULL-BOX-240',
+    confinedSpaces: [
+      'NO.1-NO.3货舱双层底空舱',
+      '球鼻艏深压载水舱',
+      '重油沉淀舱与日用舱',
+      '中纵桁隔离管弄走廊',
+      '尾轴隧密闭检修舱',
+      '侧推器安装受限舱室'
+    ],
+    engineRooms: [
+      '11X92DF双燃料主机底层动力区',
+      '主辅发电机机组平台',
+      '高压燃油共轨与滑油净化间',
+      '脱硫塔洗涤泵与循环水舱区',
+      '机舱集中控制室',
+      '机舱底层花钢板下部管系区',
+      '轴带发电机与中间轴承区'
+    ]
+  },
+  'PRJ-2026-VLCC03': {
+    name: '30万吨级 超大型原油船(VLCC)',
+    shipCode: 'HULL-VLCC-300',
+    confinedSpaces: [
+      '1#货油舱密闭作业区',
+      '2#货油舱绝热双层底',
+      '货油隔离泵舱下层',
+      '惰性气体洗涤舱',
+      '污油水回收舱',
+      '左舷边压载水舱'
+    ],
+    engineRooms: [
+      '超大型低速柴油机基座区',
+      '货油泵蒸汽驱动动力区',
+      '分油机与燃油预热处理间',
+      '锅炉燃烧室与蒸汽分配平台',
+      '机舱集控室与配电间',
+      '机舱底层油污水处理与溢油井',
+      '舵机动力液压泵站区'
+    ]
+  },
+  'PRJ-2026-BULK04': {
+    name: '8.2万吨 卡姆萨尔型散货船',
+    shipCode: 'HULL-BULK-082',
+    confinedSpaces: [
+      '1#货舱底桁压载舱',
+      '顶边舱密闭结构区',
+      '首尖压载水舱',
+      '尾尖压载水舱',
+      '管隧排水集水井'
+    ],
+    engineRooms: [
+      '主机操舵平台与活塞拆装区',
+      '柴油发电机组作业面',
+      '燃油沉淀与日用油柜区',
+      '机舱集控室',
+      '机舱底层管弄通廊',
+      '机舱通风机房与集气管区'
+    ]
+  }
+};
+
+// 汇总全厂所有船舶的有限空间和机舱区域
+export const ALL_SHIP_CONFINED_SPACES = Array.from(new Set(
+  Object.values(SHIP_PROJECT_AREAS).flatMap(p => p.confinedSpaces)
+));
+
+export const ALL_SHIP_ENGINE_ROOMS = Array.from(new Set(
+  Object.values(SHIP_PROJECT_AREAS).flatMap(p => p.engineRooms)
+));
 
 // 区域与策略类型动态联动接口
 export interface AreaOptionConfig {
@@ -20,7 +132,7 @@ export interface AreaOptionConfig {
   targets: string[];
 }
 
-// 策略类型对应区域选项动态联动数据字典（严格规范为 7 大策略类型与 3 大空间范围联动）
+// 策略类型对应区域选项动态联动数据字典（包含 作业面、有限空间、机舱内、电子围栏 4 大空间范围联动）
 export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
   '人员进入': [
     {
@@ -36,14 +148,11 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
     },
     {
       areaType: '有限空间',
-      targets: [
-        '全部有限空间',
-        '1#液货舱密闭作业区',
-        '2#双层底压载水舱',
-        '机舱管路狭窄舱室',
-        '首尖舱密闭空间',
-        '舵机舱密闭舱室'
-      ]
+      targets: ['全部有限空间', ...ALL_SHIP_CONFINED_SPACES.slice(0, 6)]
+    },
+    {
+      areaType: '机舱内',
+      targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
     },
     {
       areaType: '电子围栏',
@@ -59,15 +168,11 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
   '气体告警': [
     {
       areaType: '有限空间',
-      targets: [
-        '全部有限空间',
-        '1#液货舱密闭作业区',
-        '2#双层底压载水舱',
-        '机舱管路狭窄舱室',
-        '特种涂层作业舱',
-        '燃油日用舱',
-        '舵机舱密闭舱室'
-      ]
+      targets: ['全部有限空间', ...ALL_SHIP_CONFINED_SPACES.slice(0, 6)]
+    },
+    {
+      areaType: '机舱内',
+      targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
     },
     {
       areaType: '作业面',
@@ -94,6 +199,10 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
       ]
     },
     {
+      areaType: '机舱内',
+      targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
+    },
+    {
       areaType: '电子围栏',
       targets: [
         '全部电子围栏',
@@ -117,13 +226,11 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
     },
     {
       areaType: '有限空间',
-      targets: [
-        '全部有限空间',
-        '1#液货舱密闭作业区',
-        '2#双层底压载水舱',
-        '机舱管路狭窄舱室',
-        '特种涂层作业舱'
-      ]
+      targets: ['全部有限空间', ...ALL_SHIP_CONFINED_SPACES.slice(0, 6)]
+    },
+    {
+      areaType: '机舱内',
+      targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
     },
     {
       areaType: '作业面',
@@ -148,6 +255,10 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
       ]
     },
     {
+      areaType: '机舱内',
+      targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
+    },
+    {
       areaType: '电子围栏',
       targets: [
         '全部电子围栏',
@@ -161,14 +272,11 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
   '异常停留': [
     {
       areaType: '有限空间',
-      targets: [
-        '全部有限空间',
-        '1#液货舱密闭作业区',
-        '2#双层底压载水舱',
-        '机舱管路狭窄舱室',
-        '首尖舱密闭空间',
-        '舵机舱密闭舱室'
-      ]
+      targets: ['全部有限空间', ...ALL_SHIP_CONFINED_SPACES.slice(0, 6)]
+    },
+    {
+      areaType: '机舱内',
+      targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
     },
     {
       areaType: '作业面',
@@ -204,13 +312,11 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
     },
     {
       areaType: '有限空间',
-      targets: [
-        '全部有限空间',
-        '1#液货舱密闭作业区',
-        '机舱管路狭窄舱室',
-        '特种涂层作业舱',
-        '舵机舱密闭舱室'
-      ]
+      targets: ['全部有限空间', ...ALL_SHIP_CONFINED_SPACES.slice(0, 6)]
+    },
+    {
+      areaType: '机舱内',
+      targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
     },
     {
       areaType: '作业面',
@@ -237,15 +343,11 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
     },
     {
       areaType: '有限空间',
-      targets: [
-        '全部有限空间',
-        '1#液货舱密闭作业区',
-        '2#双层底压载水舱',
-        '机舱管路狭窄舱室',
-        '特种受限空间施工作业区',
-        '首尖舱密闭空间',
-        '舵机舱密闭舱室'
-      ]
+      targets: ['全部有限空间', ...ALL_SHIP_CONFINED_SPACES.slice(0, 6)]
+    },
+    {
+      areaType: '机舱内',
+      targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
     },
     {
       areaType: '电子围栏',
@@ -260,7 +362,7 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
   ]
 };
 
-// 通用后备选项列表（作业面、有限空间、电子围栏）
+// 通用后备选项列表（作业面、有限空间、机舱内、电子围栏 4 大类）
 export const DEFAULT_AREA_OPTIONS: AreaOptionConfig[] = [
   {
     areaType: '作业面',
@@ -275,14 +377,11 @@ export const DEFAULT_AREA_OPTIONS: AreaOptionConfig[] = [
   },
   {
     areaType: '有限空间',
-    targets: [
-      '全部有限空间',
-      '1#液货舱密闭作业区',
-      '2#双层底压载水舱',
-      '机舱管路狭窄舱室',
-      '首尖舱密闭空间',
-      '舵机舱密闭舱室'
-    ]
+    targets: ['全部有限空间', ...ALL_SHIP_CONFINED_SPACES.slice(0, 6)]
+  },
+  {
+    areaType: '机舱内',
+    targets: ['全部机舱内范围', ...ALL_SHIP_ENGINE_ROOMS.slice(0, 6)]
   },
   {
     areaType: '电子围栏',
@@ -316,8 +415,16 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
   const [name, setName] = useState('');
   const [type, setType] = useState('');
   
-  // 区域范围条件列表 (支持多条件组合)
-  const [areaConditions, setAreaConditions] = useState([
+  // 区域范围条件列表 (支持多条件组合，支持船舶项目联动与批量选择区域块)
+  const [areaConditions, setAreaConditions] = useState<Array<{
+    type: string;
+    relation: string;
+    target: string;
+    projectId?: string;
+    projectName?: string;
+    scopeMode?: 'all' | 'custom';
+    selectedTargets?: string[];
+  }>>([
     { type: '', relation: '是', target: '' }
   ]);
 
@@ -366,6 +473,24 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
     ? generateVersionId(getNextVersionNumber()) 
     : generateVersionId(1);
 
+  // 辅助函数：根据船舶项目与区域类型获取可用的工程区域块列表
+  const getShipAvailableBlocks = (prjId: string | undefined, areaType: string): string[] => {
+    if (!prjId || prjId === 'ALL') {
+      return areaType === '有限空间' ? ALL_SHIP_CONFINED_SPACES : ALL_SHIP_ENGINE_ROOMS;
+    }
+    const config = SHIP_PROJECT_AREAS[prjId];
+    if (!config) {
+      return areaType === '有限空间' ? ALL_SHIP_CONFINED_SPACES : ALL_SHIP_ENGINE_ROOMS;
+    }
+    return areaType === '有限空间' ? config.confinedSpaces : config.engineRooms;
+  };
+
+  const getShipProjectName = (prjId: string | undefined): string => {
+    if (!prjId || prjId === 'ALL') return '全厂所有在建船舶';
+    const prj = MOCK_PROJECTS.find(p => p.id === prjId);
+    return prj ? prj.name : (SHIP_PROJECT_AREAS[prjId]?.name || '指定船舶项目');
+  };
+
   // 当 editRule 发生变化时，回填表单
   useEffect(() => {
     if (isOpen) {
@@ -376,7 +501,30 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
         setType(editRule.type || '');
         
         if (editRule.areaConditions && editRule.areaConditions.length > 0) {
-          setAreaConditions([...editRule.areaConditions]);
+          const parsed = editRule.areaConditions.map(c => {
+            if (c.type === '有限空间' || c.type === '机舱内') {
+              let prjId = c.projectId;
+              if (!prjId) {
+                const match = (c.target || '').match(/^\[(.*?)\]/);
+                if (match) {
+                  const matchedName = match[1];
+                  const found = MOCK_PROJECTS.find(p => p.name.includes(matchedName) || matchedName.includes(p.name));
+                  if (found) prjId = found.id;
+                }
+              }
+              prjId = prjId || MOCK_PROJECTS[0].id;
+              const isAll = (c.target || '').includes('全部') || (!c.selectedTargets || c.selectedTargets.length === 0);
+              return {
+                ...c,
+                projectId: prjId,
+                projectName: getShipProjectName(prjId),
+                scopeMode: isAll ? ('all' as const) : ('custom' as const),
+                selectedTargets: c.selectedTargets || (isAll ? [] : (c.target || '').replace(/^\[.*?\]\s*/, '').split(/[、,，]/).map(s => s.trim()).filter(Boolean))
+              };
+            }
+            return { ...c };
+          });
+          setAreaConditions(parsed);
         } else {
           setAreaConditions([{ type: '作业面', relation: '是', target: '1号船台搭载作业面 (185段)' }]);
         }
@@ -584,7 +732,31 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
       name: name.trim(),
       type: type,
       level: mainLevel,
-      areaConditions: areaConditions.filter(c => c.type || c.target),
+      areaConditions: areaConditions
+        .filter(c => c.type || c.target)
+        .map(cond => {
+          if (cond.type === '有限空间' || cond.type === '机舱内') {
+            const prjId = cond.projectId || MOCK_PROJECTS[0].id;
+            const prjName = getShipProjectName(prjId);
+            const isAll = cond.scopeMode === 'all' || !cond.selectedTargets || cond.selectedTargets.length === 0;
+            const targetStr = isAll 
+              ? `[${prjName}] 全部${cond.type}` 
+              : `[${prjName}] ${cond.selectedTargets!.join('、')}`;
+            return {
+              type: cond.type,
+              relation: cond.relation || '是',
+              target: targetStr,
+              projectId: prjId,
+              projectName: prjName,
+              selectedTargets: isAll ? undefined : cond.selectedTargets
+            };
+          }
+          return {
+            type: cond.type,
+            relation: cond.relation || '是',
+            target: cond.target
+          };
+        }),
       personConditions: personConditions.filter(c => c.scope || c.target),
       conditionType: conditionType || '滞留超时时长',
       conditionOperator: conditionOperator || '大于',
@@ -828,75 +1000,372 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                 const selectedCfg = currentAreaConfigs.find(c => c.areaType === cond.type);
                 const currentTargets = selectedCfg ? selectedCfg.targets : (cond.target ? [cond.target] : []);
 
+                const isShipSpace = cond.type === '有限空间' || cond.type === '机舱内';
+                const currentPrjId = cond.projectId || MOCK_PROJECTS[0].id;
+                const availableBlocks = getShipAvailableBlocks(currentPrjId, cond.type);
+                const currentSelectedBlocks = cond.selectedTargets || [];
+                const isAllSelected = cond.scopeMode === 'all' || currentSelectedBlocks.length === 0;
+
                 return (
-                  <div key={idx} className="flex items-center gap-2.5">
-                    {/* 区域类型选择 */}
-                    <select 
-                      value={cond.type}
-                      onChange={(e) => {
-                        const selectedAreaType = e.target.value;
-                        const updated = [...areaConditions];
-                        updated[idx].type = selectedAreaType;
-
-                        // 联动该区域类型的首选目标
-                        const cfg = currentAreaConfigs.find(c => c.areaType === selectedAreaType);
-                        if (cfg && cfg.targets.length > 0) {
-                          updated[idx].target = cfg.targets[0];
-                        }
-                        setAreaConditions(updated);
-                      }}
-                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-medium"
-                    >
-                      <option value="" disabled hidden>请选择区域类型</option>
-                      {currentAreaConfigs.map(cfg => (
-                        <option key={cfg.areaType} value={cfg.areaType}>
-                          {cfg.areaType}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* 关系 */}
-                    <select 
-                      value={cond.relation}
-                      onChange={(e) => {
-                        const updated = [...areaConditions];
-                        updated[idx].relation = e.target.value;
-                        setAreaConditions(updated);
-                      }}
-                      className="w-28 px-2 py-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-medium"
-                    >
-                      <option value="是">是 (在区域内)</option>
-                      <option value="否">否 (排除/不在区域内)</option>
-                    </select>
-
-                    {/* 具体目标区域 */}
-                    <select 
-                      value={cond.target}
-                      onChange={(e) => {
-                        const updated = [...areaConditions];
-                        updated[idx].target = e.target.value;
-                        setAreaConditions(updated);
-                      }}
-                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-medium"
-                    >
-                      <option value="" disabled hidden>请选择指定区域</option>
-                      {cond.target && !currentTargets.includes(cond.target) && (
-                        <option value={cond.target}>{cond.target}</option>
-                      )}
-                      {currentTargets.map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-
-                    {areaConditions.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAreaCondition(idx)}
-                        className="p-1 text-slate-400 hover:text-rose-500 rounded hover:bg-rose-50 transition-colors cursor-pointer"
-                        title="删除此条件"
+                  <div 
+                    key={idx} 
+                    className={`rounded-xl transition-all border ${
+                      isShipSpace 
+                        ? 'p-3 bg-slate-50/70 border-slate-200 shadow-2xs space-y-3' 
+                        : 'p-1.5 bg-transparent border-transparent'
+                    }`}
+                  >
+                    {/* 顶部主选择栏 */}
+                    <div className="flex items-center gap-2.5">
+                      {/* 区域类型选择 */}
+                      <select 
+                        value={cond.type}
+                        onChange={(e) => {
+                          const selectedAreaType = e.target.value;
+                          const updated = [...areaConditions];
+                          const newIsShip = selectedAreaType === '有限空间' || selectedAreaType === '机舱内';
+                          const defaultPrjId = updated[idx].projectId || MOCK_PROJECTS[0].id;
+                          const prjName = getShipProjectName(defaultPrjId);
+                          
+                          updated[idx] = {
+                            ...updated[idx],
+                            type: selectedAreaType,
+                            projectId: defaultPrjId,
+                            projectName: prjName,
+                            scopeMode: 'all',
+                            selectedTargets: [],
+                            target: newIsShip 
+                              ? `[${prjName}] 全部${selectedAreaType}` 
+                              : (currentAreaConfigs.find(c => c.areaType === selectedAreaType)?.targets[0] || '')
+                          };
+                          setAreaConditions(updated);
+                        }}
+                        className={`w-36 px-3 py-1.5 border rounded-lg text-[13px] bg-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${
+                          cond.type === '有限空间'
+                            ? 'border-purple-300 text-purple-700 font-bold bg-purple-50/30'
+                            : cond.type === '机舱内'
+                            ? 'border-amber-300 text-amber-700 font-bold bg-amber-50/30'
+                            : 'border-slate-200 text-slate-800'
+                        }`}
                       >
-                        <X className="w-4 h-4" />
-                      </button>
+                        <option value="" disabled hidden>请选择区域类型</option>
+                        {currentAreaConfigs.map(cfg => (
+                          <option key={cfg.areaType} value={cfg.areaType}>
+                            {cfg.areaType === '机舱内' ? '⚙️ 机舱内 (船舶动力区)' : cfg.areaType === '有限空间' ? '🚢 有限空间 (受限舱位)' : cfg.areaType}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* 关系 (是/否) */}
+                      <select 
+                        value={cond.relation}
+                        onChange={(e) => {
+                          const updated = [...areaConditions];
+                          updated[idx].relation = e.target.value;
+                          setAreaConditions(updated);
+                        }}
+                        className="w-28 px-2 py-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-medium cursor-pointer"
+                      >
+                        <option value="是">是 (在区域内)</option>
+                        <option value="否">否 (排除/不在区域内)</option>
+                      </select>
+
+                      {/* 普通类型 (作业面 / 电子围栏)：原有快速单选下拉 */}
+                      {!isShipSpace && (
+                        <select 
+                          value={cond.target}
+                          onChange={(e) => {
+                            const updated = [...areaConditions];
+                            updated[idx].target = e.target.value;
+                            setAreaConditions(updated);
+                          }}
+                          className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-medium"
+                        >
+                          <option value="" disabled hidden>请选择指定区域</option>
+                          {cond.target && !currentTargets.includes(cond.target) && (
+                            <option value={cond.target}>{cond.target}</option>
+                          )}
+                          {currentTargets.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* 有限空间 / 机舱内类型：顶部展示当前设定摘要 */}
+                      {isShipSpace && (
+                        <div className="flex-1 flex items-center justify-between px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs truncate">
+                          <span className="text-slate-500">生效范围:</span>
+                          <span className="font-semibold text-slate-800 truncate ml-2">
+                            {cond.target || `[${getShipProjectName(currentPrjId)}] 全部${cond.type}`}
+                          </span>
+                        </div>
+                      )}
+
+                      {areaConditions.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAreaCondition(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+                          title="删除此条件"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 有限空间与机舱内：专属船舶项目与区域块多选联动控制面板 */}
+                    {isShipSpace && (
+                      <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
+                        
+                        {/* 1. 船舶项目选择 */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 shrink-0">
+                            <Ship className="w-3.5 h-3.5 text-blue-600" />
+                            <span>选择船舶建造项目:</span>
+                          </label>
+                          <select
+                            value={currentPrjId}
+                            onChange={(e) => {
+                              const newPrjId = e.target.value;
+                              const prjName = getShipProjectName(newPrjId);
+                              const newAvail = getShipAvailableBlocks(newPrjId, cond.type);
+                              const updated = [...areaConditions];
+                              
+                              // 保留仍有效的区域块
+                              const filteredBlocks = (cond.selectedTargets || []).filter(b => newAvail.includes(b));
+                              const isAll = cond.scopeMode === 'all' || filteredBlocks.length === 0;
+                              const targetText = isAll 
+                                ? `[${prjName}] 全部${cond.type}` 
+                                : `[${prjName}] ${filteredBlocks.join('、')}`;
+
+                              updated[idx] = {
+                                ...cond,
+                                projectId: newPrjId,
+                                projectName: prjName,
+                                selectedTargets: filteredBlocks,
+                                target: targetText
+                              };
+                              setAreaConditions(updated);
+                            }}
+                            className="flex-1 px-2.5 py-1.5 border border-slate-200 rounded-md text-xs text-slate-800 font-medium bg-slate-50/50 hover:bg-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                          >
+                            <option value="ALL">🌐 全厂所有在建船舶工程 (汇总所有船体{cond.type})</option>
+                            {MOCK_PROJECTS.map(prj => (
+                              <option key={prj.id} value={prj.id}>
+                                🚢 {prj.name} ({prj.shipCode || prj.id})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 2. 范围模式切换：全部 vs 手动批量选择多个区域块 */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-600">适用范围设定:</span>
+                            <div className="inline-flex rounded-md p-0.5 bg-slate-100 border border-slate-200 text-xs">
+                              {/* 选项 A: 选择全部 */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...areaConditions];
+                                  const prjName = getShipProjectName(currentPrjId);
+                                  updated[idx] = {
+                                    ...cond,
+                                    scopeMode: 'all',
+                                    target: `[${prjName}] 全部${cond.type}`
+                                  };
+                                  setAreaConditions(updated);
+                                }}
+                                className={`px-2.5 py-1 rounded font-medium transition-all cursor-pointer ${
+                                  isAllSelected 
+                                    ? 'bg-blue-600 text-white shadow-xs' 
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                全部{cond.type}
+                              </button>
+
+                              {/* 选项 B: 手动批量选择多个区域块 */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...areaConditions];
+                                  const prjName = getShipProjectName(currentPrjId);
+                                  // 若未选，默认勾选前 2 项作为操作指引
+                                  const initialBlocks = (cond.selectedTargets && cond.selectedTargets.length > 0)
+                                    ? cond.selectedTargets
+                                    : availableBlocks.slice(0, 2);
+                                  updated[idx] = {
+                                    ...cond,
+                                    scopeMode: 'custom',
+                                    selectedTargets: initialBlocks,
+                                    target: `[${prjName}] ${initialBlocks.join('、')}`
+                                  };
+                                  setAreaConditions(updated);
+                                }}
+                                className={`px-2.5 py-1 rounded font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                                  !isAllSelected 
+                                    ? 'bg-blue-600 text-white shadow-xs' 
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                <span>手动批量选择多个区域块</span>
+                                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                                  !isAllSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-200 text-slate-600'
+                                }`}>
+                                  {currentSelectedBlocks.length}
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 手动批量模式时的操作辅助按键 */}
+                          {!isAllSelected && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...areaConditions];
+                                  const prjName = getShipProjectName(currentPrjId);
+                                  updated[idx] = {
+                                    ...cond,
+                                    scopeMode: 'custom',
+                                    selectedTargets: [...availableBlocks],
+                                    target: `[${prjName}] ${availableBlocks.join('、')}`
+                                  };
+                                  setAreaConditions(updated);
+                                }}
+                                className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                              >
+                                全选 ({availableBlocks.length})
+                              </button>
+                              <span className="text-slate-300">|</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...areaConditions];
+                                  const prjName = getShipProjectName(currentPrjId);
+                                  updated[idx] = {
+                                    ...cond,
+                                    scopeMode: 'custom',
+                                    selectedTargets: [],
+                                    target: `[${prjName}] 请在下方勾选区域块`
+                                  };
+                                  setAreaConditions(updated);
+                                }}
+                                className="text-slate-500 hover:text-slate-700 hover:underline cursor-pointer"
+                              >
+                                清空
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 全部范围状态提示 */}
+                        {isAllSelected && (
+                          <div className="p-2.5 bg-blue-50/60 border border-blue-200/80 rounded-lg text-xs text-blue-800 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                              <span>已选择 <strong>{getShipProjectName(currentPrjId)}</strong> 旗下的 <strong>全部{cond.type}</strong>（共纳入该船 <strong>{availableBlocks.length}</strong> 处受控区域块）。</span>
+                            </span>
+                            <span className="text-[11px] text-blue-600 font-mono bg-blue-100/70 px-2 py-0.5 rounded">
+                              全域生效
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 3. 手动批量选择区域块复选网格 */}
+                        {!isAllSelected && (
+                          <div className="space-y-2 pt-1">
+                            <div className="text-[11px] text-slate-500 flex items-center justify-between">
+                              <span>点击勾选/取消勾选具体区域块，可多选并随时调整：</span>
+                              <span className="font-mono text-slate-600">已选 {currentSelectedBlocks.length} / {availableBlocks.length}</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto p-1 bg-slate-50 rounded-lg border border-slate-200">
+                              {availableBlocks.map((blockName) => {
+                                const isChecked = currentSelectedBlocks.includes(blockName);
+                                return (
+                                  <label
+                                    key={blockName}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      const updated = [...areaConditions];
+                                      const prjName = getShipProjectName(currentPrjId);
+                                      let newBlocks: string[];
+                                      if (isChecked) {
+                                        newBlocks = currentSelectedBlocks.filter(b => b !== blockName);
+                                      } else {
+                                        newBlocks = [...currentSelectedBlocks, blockName];
+                                      }
+                                      const targetStr = newBlocks.length > 0 
+                                        ? `[${prjName}] ${newBlocks.join('、')}` 
+                                        : `[${prjName}] 请在下方勾选区域块`;
+
+                                      updated[idx] = {
+                                        ...cond,
+                                        scopeMode: 'custom',
+                                        selectedTargets: newBlocks,
+                                        target: targetStr
+                                      };
+                                      setAreaConditions(updated);
+                                    }}
+                                    className={`flex items-center gap-2 p-2 rounded-md border text-xs cursor-pointer select-none transition-all ${
+                                      isChecked
+                                        ? 'bg-blue-50/90 border-blue-400 text-blue-900 font-semibold shadow-2xs'
+                                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-100/50'
+                                    }`}
+                                  >
+                                    {isChecked ? (
+                                      <CheckSquare className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                    ) : (
+                                      <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                    )}
+                                    <span className="truncate">{blockName}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            {/* 已选标签列表汇总 */}
+                            {currentSelectedBlocks.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <span className="text-[11px] text-slate-500 font-medium">已选区域块:</span>
+                                {currentSelectedBlocks.map(block => (
+                                  <span
+                                    key={block}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100/80 text-blue-800 text-[11px] font-medium border border-blue-200"
+                                  >
+                                    <span>{block}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = [...areaConditions];
+                                        const prjName = getShipProjectName(currentPrjId);
+                                        const newBlocks = currentSelectedBlocks.filter(b => b !== block);
+                                        const targetStr = newBlocks.length > 0 
+                                          ? `[${prjName}] ${newBlocks.join('、')}` 
+                                          : `[${prjName}] 全部${cond.type}`;
+                                        updated[idx] = {
+                                          ...cond,
+                                          scopeMode: newBlocks.length > 0 ? 'custom' : 'all',
+                                          selectedTargets: newBlocks,
+                                          target: targetStr
+                                        };
+                                        setAreaConditions(updated);
+                                      }}
+                                      className="text-blue-500 hover:text-blue-700 p-0.5 rounded cursor-pointer"
+                                      title="移除此项"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 );
