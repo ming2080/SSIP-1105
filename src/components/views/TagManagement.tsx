@@ -68,6 +68,7 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
   const [statusFilter, setStatusFilter] = useState<'all' | 'used' | 'unused'>('all');
   const [deviceFilter, setDeviceFilter] = useState<'all' | 'online' | 'offline'>('all');
   const [batteryFilter, setBatteryFilter] = useState<'all' | 'normal' | 'low' | 'none'>('all');
+  const [detachFilter, setDetachFilter] = useState<'all' | 'detached' | 'normal'>('all');
 
   // 多选选中的标签 ID 集合
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -169,9 +170,15 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
         }
       }
 
+      // 6. 脱落状态过滤
+      if (detachFilter !== 'all') {
+        const currentDetach = item.detachStatus || 'normal';
+        if (currentDetach !== detachFilter) return false;
+      }
+
       return true;
     });
-  }, [tags, searchCode, searchPerson, statusFilter, deviceFilter, batteryFilter]);
+  }, [tags, searchCode, searchPerson, statusFilter, deviceFilter, batteryFilter, detachFilter]);
 
   // 统计概览指标
   const statistics = useMemo(() => {
@@ -180,8 +187,55 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
     const unusedCount = tags.filter(t => t.tagStatus === 'unused').length;
     const onlineCount = tags.filter(t => t.deviceStatus === 'online').length;
     const lowBatteryCount = tags.filter(t => t.batteryLevel === 'low').length;
-    return { total, usedCount, unusedCount, onlineCount, lowBatteryCount };
+    const detachedCount = tags.filter(t => t.detachStatus === 'detached').length;
+    return { total, usedCount, unusedCount, onlineCount, lowBatteryCount, detachedCount };
   }, [tags]);
+
+  // 当前激活的快捷统计卡片标识（用于高亮展示）
+  const activeStatCard = useMemo(() => {
+    const hasSearch = Boolean(searchCode.trim() || searchPerson.trim());
+    if (!hasSearch && statusFilter === 'all' && deviceFilter === 'all' && batteryFilter === 'all' && detachFilter === 'all') {
+      return 'total';
+    }
+    if (statusFilter === 'used' && deviceFilter === 'all' && batteryFilter === 'all' && detachFilter === 'all') {
+      return 'used';
+    }
+    if (statusFilter === 'unused' && deviceFilter === 'all' && batteryFilter === 'all' && detachFilter === 'all') {
+      return 'unused';
+    }
+    if (deviceFilter === 'online' && statusFilter === 'all' && batteryFilter === 'all' && detachFilter === 'all') {
+      return 'online';
+    }
+    if (batteryFilter === 'low' && statusFilter === 'all' && deviceFilter === 'all' && detachFilter === 'all') {
+      return 'lowBattery';
+    }
+    if (detachFilter === 'detached' && statusFilter === 'all' && deviceFilter === 'all' && batteryFilter === 'all') {
+      return 'detached';
+    }
+    return null;
+  }, [searchCode, searchPerson, statusFilter, deviceFilter, batteryFilter, detachFilter]);
+
+  // 点击统计数据卡片进行业务快捷过滤
+  const handleStatCardClick = (cardKey: 'total' | 'used' | 'unused' | 'online' | 'lowBattery' | 'detached') => {
+    setSelectedIds(new Set());
+    if (cardKey === 'total') {
+      handleResetFilters();
+      return;
+    }
+    if (activeStatCard === cardKey) {
+      // 再次点击当前已选中的卡片，恢复全部数据
+      setStatusFilter('all');
+      setDeviceFilter('all');
+      setBatteryFilter('all');
+      setDetachFilter('all');
+      return;
+    }
+    // 切换至目标业务过滤条件
+    setStatusFilter(cardKey === 'used' ? 'used' : cardKey === 'unused' ? 'unused' : 'all');
+    setDeviceFilter(cardKey === 'online' ? 'online' : 'all');
+    setBatteryFilter(cardKey === 'lowBattery' ? 'low' : 'all');
+    setDetachFilter(cardKey === 'detached' ? 'detached' : 'all');
+  };
 
   // 全选/取消全选
   const handleSelectAll = (checked: boolean) => {
@@ -214,6 +268,7 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
     setStatusFilter('all');
     setDeviceFilter('all');
     setBatteryFilter('all');
+    setDetachFilter('all');
   };
 
   // 打开查看详情弹窗
@@ -339,7 +394,8 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
           personName: selectedPerson.name,
           deptName: selectedPerson.deptname,
           lastUpdateTime: nowStr,
-          deviceStatus: 'online' as const
+          deviceStatus: 'online' as const,
+          detachStatus: 'normal' as const
         };
       }
       return t;
@@ -369,7 +425,8 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
           personName: '-',
           deptName: undefined,
           lastUpdateTime: nowStr,
-          deviceStatus: 'offline' as const
+          deviceStatus: 'offline' as const,
+          detachStatus: 'normal' as const
         };
       }
       return t;
@@ -408,7 +465,8 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
           personName: '-',
           deptName: undefined,
           lastUpdateTime: nowStr,
-          deviceStatus: 'offline' as const
+          deviceStatus: 'offline' as const,
+          detachStatus: 'normal' as const
         };
       }
       return t;
@@ -427,7 +485,7 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
 
   // 导出标签数据为 CSV
   const handleExportCSV = () => {
-    const headers = ['序号', '标签编码', '标签状态', '人员名称', '电量', '设备状态', '最后更新时间', '备注'];
+    const headers = ['序号', '标签编码', '标签状态', '人员名称', '电量', '设备状态', '脱落状态', '最后更新时间', '备注'];
     const rows = filteredTags.map((item, index) => [
       index + 1,
       item.tagCode,
@@ -435,6 +493,7 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
       item.personName || '-',
       item.batteryLevel === 'low' ? '低电量' : item.batteryLevel === 'normal' ? '正常电量' : '-',
       item.deviceStatus === 'online' ? '在线' : '离线',
+      item.detachStatus === 'detached' ? '标签脱落' : (item.tagStatus === 'used' && item.deviceStatus === 'online' ? '佩戴正常' : '-'),
       item.lastUpdateTime || '-',
       item.remark || ''
     ]);
@@ -515,45 +574,144 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
         </div>
       </div>
 
-      {/* 状态统计小卡片 */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-slate-400 text-xs font-medium">总标签总数</span>
+      {/* 状态统计小卡片（支持点击每个数据块按业务状态快捷过滤列表） */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <button
+          type="button"
+          onClick={() => handleStatCardClick('total')}
+          className={`text-left bg-white p-3.5 rounded-xl border transition-all cursor-pointer group ${
+            activeStatCard === 'total'
+              ? 'border-slate-700 ring-2 ring-slate-700/15 shadow-sm'
+              : 'border-slate-200 shadow-2xs hover:border-slate-300 hover:shadow-sm'
+          }`}
+          title="点击查看全部定位标签"
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-slate-500 text-xs font-medium">总标签总数</span>
+            {activeStatCard === 'total' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">全部</span>
+            )}
+          </div>
           <div className="text-xl font-bold font-mono text-slate-900 mt-1">{statistics.total}</div>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-blue-600 text-xs font-medium flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-blue-600"></span> 已使用 (已绑定人员)
-          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleStatCardClick('used')}
+          className={`text-left bg-white p-3.5 rounded-xl border transition-all cursor-pointer group ${
+            activeStatCard === 'used'
+              ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 shadow-sm'
+              : 'border-slate-200 shadow-2xs hover:border-blue-300 hover:shadow-sm'
+          }`}
+          title="点击过滤已使用(已绑定人员)的标签"
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-blue-600 text-xs font-medium flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-blue-600"></span> 已使用 (已绑定人员)
+            </span>
+            {activeStatCard === 'used' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">筛选中</span>
+            )}
+          </div>
           <div className="text-xl font-bold font-mono text-blue-600 mt-1">{statistics.usedCount}</div>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-rose-600 text-xs font-medium flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-rose-600"></span> 未使用 (库存空闲)
-          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleStatCardClick('unused')}
+          className={`text-left bg-white p-3.5 rounded-xl border transition-all cursor-pointer group ${
+            activeStatCard === 'unused'
+              ? 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20 shadow-sm'
+              : 'border-slate-200 shadow-2xs hover:border-rose-300 hover:shadow-sm'
+          }`}
+          title="点击过滤未使用(库存空闲)的标签"
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-rose-600 text-xs font-medium flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-rose-600"></span> 未使用 (库存空闲)
+            </span>
+            {activeStatCard === 'unused' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-semibold">筛选中</span>
+            )}
+          </div>
           <div className="text-xl font-bold font-mono text-rose-600 mt-1">{statistics.unusedCount}</div>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-emerald-600 text-xs font-medium flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span> 设备在线
-          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleStatCardClick('online')}
+          className={`text-left bg-white p-3.5 rounded-xl border transition-all cursor-pointer group ${
+            activeStatCard === 'online'
+              ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20 shadow-sm'
+              : 'border-slate-200 shadow-2xs hover:border-emerald-300 hover:shadow-sm'
+          }`}
+          title="点击过滤当前在线的定位标签"
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-emerald-600 text-xs font-medium flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> 设备在线
+            </span>
+            {activeStatCard === 'online' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">筛选中</span>
+            )}
+          </div>
           <div className="text-xl font-bold font-mono text-emerald-600 mt-1">{statistics.onlineCount}</div>
-        </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-rose-600 text-xs font-medium flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-rose-500"></span> 低电量告警
-          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleStatCardClick('lowBattery')}
+          className={`text-left bg-white p-3.5 rounded-xl border transition-all cursor-pointer group ${
+            activeStatCard === 'lowBattery'
+              ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/20 shadow-sm'
+              : 'border-slate-200 shadow-2xs hover:border-amber-300 hover:shadow-sm'
+          }`}
+          title="点击过滤低电量告警标签"
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-amber-600 text-xs font-medium flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span> 低电量告警
+            </span>
+            {activeStatCard === 'lowBattery' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">筛选中</span>
+            )}
+          </div>
           <div className={`text-xl font-bold font-mono mt-1 ${
-            statistics.lowBatteryCount > 0 ? 'text-rose-600 font-extrabold' : 'text-slate-700'
+            statistics.lowBatteryCount > 0 ? 'text-amber-600 font-extrabold' : 'text-slate-700'
           }`}>
             {statistics.lowBatteryCount}
           </div>
-        </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleStatCardClick('detached')}
+          className={`text-left bg-white p-3.5 rounded-xl border transition-all cursor-pointer group ${
+            activeStatCard === 'detached'
+              ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50/25 shadow-sm'
+              : 'border-slate-200 shadow-2xs hover:border-red-300 hover:shadow-sm'
+          }`}
+          title="点击过滤已脱落(防拆触发)的定位标签"
+        >
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-red-600 text-xs font-medium flex items-center gap-1">
+              <span className={`w-2 h-2 rounded-full bg-red-500 ${statistics.detachedCount > 0 ? 'animate-pulse' : ''}`}></span> 脱落标签
+            </span>
+            {activeStatCard === 'detached' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">筛选中</span>
+            )}
+          </div>
+          <div className={`text-xl font-bold font-mono mt-1 ${
+            statistics.detachedCount > 0 ? 'text-red-600 font-extrabold' : 'text-slate-700'
+          }`}>
+            {statistics.detachedCount}
+          </div>
+        </button>
       </div>
 
       {/* 查询搜索与过滤控制台 */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5">
           {/* 标签编码 */}
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-slate-500">标签编码</label>
@@ -618,8 +776,22 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
             >
               <option value="all">全部电量情况</option>
               <option value="normal">正常电量</option>
-              <option value="low">低电量 (红色告警)</option>
+              <option value="low">低电量 (告警)</option>
               <option value="none">未上报 (-)</option>
+            </select>
+          </div>
+
+          {/* 脱落状态 */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500">脱落状态</label>
+            <select
+              value={detachFilter}
+              onChange={e => setDetachFilter(e.target.value as any)}
+              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="all">全部脱落状态</option>
+              <option value="detached">标签脱落 (告警)</option>
+              <option value="normal">未脱落 / 正常</option>
             </select>
           </div>
         </div>
@@ -708,17 +880,20 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
                 {/* 7. 设备状态 */}
                 <th className="py-3 px-4 min-w-[100px]">设备状态</th>
 
-                {/* 8. 最后更新时间 */}
+                {/* 8. 脱落状态 */}
+                <th className="py-3 px-4 min-w-[110px]">脱落状态</th>
+
+                {/* 9. 最后更新时间 */}
                 <th className="py-3 px-4 min-w-[160px]">最后更新时间</th>
 
-                {/* 9. 操作 */}
+                {/* 10. 操作 */}
                 <th className="py-3 px-4 min-w-[140px] text-right">操作</th>
               </tr>
             </thead>
             <tbody>
               {filteredTags.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
                     没有找到匹配的定位标签记录，请尝试调整搜索条件或点击“新增标签”。
                   </td>
                 </tr>
@@ -814,7 +989,21 @@ export function TagManagement({ onNavigateToPersonnel }: TagManagementProps = {}
                         </span>
                       </td>
 
-                      {/* 8. 最后更新时间 (附图如 2026-09-15 11:12:34) */}
+                      {/* 8. 脱落状态 */}
+                      <td className="py-3 px-4">
+                        {tag.detachStatus === 'detached' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-600 border border-red-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                            标签脱落
+                          </span>
+                        ) : isUsed && tag.deviceStatus === 'online' ? (
+                          <span className="text-emerald-600 font-medium">佩戴正常</span>
+                        ) : (
+                          <span className="text-slate-400 font-mono">-</span>
+                        )}
+                      </td>
+
+                      {/* 9. 最后更新时间 (附图如 2026-09-15 11:12:34) */}
                       <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
                         {tag.lastUpdateTime ? tag.lastUpdateTime : '-'}
                       </td>

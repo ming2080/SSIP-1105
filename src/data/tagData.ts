@@ -8,6 +8,7 @@
  */
 
 export type BatteryLevel = 'normal' | 'low'; // 电量信息只有两种：1. 正常电量  2. 低电量
+export type DetachStatus = 'normal' | 'detached'; // 标签佩戴/脱落状态: normal(佩戴正常) | detached(标签脱落告警)
 
 export interface LocationTagItem {
   id: string;
@@ -18,13 +19,14 @@ export interface LocationTagItem {
   deptName?: string; // 人员所属部门
   batteryLevel?: BatteryLevel | null; // 电量情况: normal(正常电量) | low(低电量) | null(-) 由设备上报产生，不可手动创建编辑
   deviceStatus: 'online' | 'offline'; // 设备状态: 在线 | 离线 由设备上报产生，不可手动创建编辑
+  detachStatus?: DetachStatus; // 脱落状态: normal(佩戴正常) | detached(已脱落) 由防拆触点自动上报
   lastUpdateTime?: string; // 最后更新时间 (如 2026-09-15 11:12:34)
   remark?: string; // 备注
 }
 
 export const TAGS_STORAGE_KEY = 'shipyard_location_tags';
 
-// 初始定位标签数据（包含附图所示示例及正常/低电量上报示范）
+// 初始定位标签数据（包含附图所示示例及正常/低电量/脱落上报示范）
 export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
   {
     id: 'TAG-INIT-001',
@@ -33,6 +35,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     personName: '-',
     batteryLevel: null,
     deviceStatus: 'offline',
+    detachStatus: 'normal',
     lastUpdateTime: '',
     remark: '附图预置未绑定标签'
   },
@@ -45,6 +48,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     deptName: '制造部//船体装配二班',
     batteryLevel: null,
     deviceStatus: 'offline',
+    detachStatus: 'normal',
     lastUpdateTime: '2026-09-15 11:12:34',
     remark: '附图预置已绑定标签'
   },
@@ -57,6 +61,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     deptName: '制造部//船体电焊一组',
     batteryLevel: 'normal',
     deviceStatus: 'online',
+    detachStatus: 'normal',
     lastUpdateTime: '2026-09-15 10:45:12',
     remark: '标准防爆工牌卡'
   },
@@ -69,6 +74,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     deptName: '制造部//船体电焊一组',
     batteryLevel: 'low', // 演示低电量红字
     deviceStatus: 'online',
+    detachStatus: 'normal',
     lastUpdateTime: '2026-09-15 10:50:08',
     remark: '标准防爆工牌卡'
   },
@@ -81,8 +87,9 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     deptName: '制造部//船体装配二班',
     batteryLevel: 'normal',
     deviceStatus: 'online',
+    detachStatus: 'detached', // 演示安全帽防拆触点脱落告警
     lastUpdateTime: '2026-09-15 09:30:25',
-    remark: '安全帽型定位卡'
+    remark: '安全帽型定位卡（检测到防拆触点脱离）'
   },
   {
     id: 'TAG-INIT-006',
@@ -91,6 +98,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     personName: '-',
     batteryLevel: 'normal',
     deviceStatus: 'offline',
+    detachStatus: 'normal',
     lastUpdateTime: '2026-09-14 16:20:00',
     remark: '高精度防爆工牌备用库'
   },
@@ -101,6 +109,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     personName: '-',
     batteryLevel: 'low', // 演示备用库低电量预警
     deviceStatus: 'offline',
+    detachStatus: 'normal',
     lastUpdateTime: '2026-09-14 16:20:00',
     remark: '高精度防爆工牌备用库'
   },
@@ -111,6 +120,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     personName: '-',
     batteryLevel: 'normal',
     deviceStatus: 'offline',
+    detachStatus: 'normal',
     lastUpdateTime: '2026-09-13 14:10:00',
     remark: '安全帽内置定位卡'
   },
@@ -121,6 +131,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     personName: '-',
     batteryLevel: 'normal',
     deviceStatus: 'offline',
+    detachStatus: 'normal',
     lastUpdateTime: '2026-09-13 14:10:00',
     remark: '高精度工牌卡备用'
   },
@@ -133,8 +144,9 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     deptName: '机电工程部//主电缆敷设班',
     batteryLevel: 'normal',
     deviceStatus: 'online',
+    detachStatus: 'detached', // 演示人员作业期间标签脱落
     lastUpdateTime: '2026-09-15 11:05:18',
-    remark: '船坞专用定位卡'
+    remark: '船坞专用定位卡（触发标签脱落告警）'
   },
   {
     id: 'TAG-INIT-011',
@@ -143,6 +155,7 @@ export const INITIAL_TAG_ITEMS: LocationTagItem[] = [
     personName: '-',
     batteryLevel: null,
     deviceStatus: 'offline',
+    detachStatus: 'normal',
     lastUpdateTime: '',
     remark: '备用定位标签'
   }
@@ -156,7 +169,7 @@ export function getStoredTags(): LocationTagItem[] {
     const saved = localStorage.getItem(TAGS_STORAGE_KEY);
     if (saved) {
       const parsed: any[] = JSON.parse(saved);
-      // 兼容历史老数据格式：若存在旧的 battery 数字，则自动映射为 normal/low
+      // 兼容历史老数据格式：若存在旧的 battery 数字，则自动映射为 normal/low；若无 detachStatus 则迁移默认配置
       return parsed.map(item => {
         let batteryLevel: BatteryLevel | null = item.batteryLevel ?? null;
         if (batteryLevel === undefined || batteryLevel === null) {
@@ -164,9 +177,17 @@ export function getStoredTags(): LocationTagItem[] {
             batteryLevel = item.battery < 20 ? 'low' : 'normal';
           }
         }
+        let detachStatus: DetachStatus = item.detachStatus;
+        if (!detachStatus) {
+          const preset = INITIAL_TAG_ITEMS.find(init => init.id === item.id);
+          detachStatus = (item.tagStatus === 'used' && preset?.detachStatus === 'detached')
+            ? 'detached'
+            : 'normal';
+        }
         return {
           ...item,
-          batteryLevel
+          batteryLevel,
+          detachStatus
         };
       });
     }
@@ -223,7 +244,8 @@ export function syncTagOnPersonnelIssue(
         empId: undefined,
         personName: '-',
         lastUpdateTime: nowStr,
-        deviceStatus: 'offline' as const
+        deviceStatus: 'offline' as const,
+        detachStatus: 'normal' as const
       };
     }
     // 如果绑定新卡，将新标签置为已使用
@@ -234,7 +256,8 @@ export function syncTagOnPersonnelIssue(
         tagStatus: 'used' as const,
         empId,
         personName,
-        lastUpdateTime: nowStr
+        lastUpdateTime: nowStr,
+        detachStatus: 'normal' as const
       };
     }
     return tag;
@@ -251,6 +274,7 @@ export function syncTagOnPersonnelIssue(
       personName,
       batteryLevel: 'normal',
       deviceStatus: 'online',
+      detachStatus: 'normal',
       lastUpdateTime: nowStr,
       remark: '人员管理发卡自动登记'
     });

@@ -21,6 +21,12 @@ export interface AlarmRuleVersion {
     conditionType: string;
     conditionOperator: string;
     conditionValue: number;
+    policyConditions?: Array<{
+      type: string;
+      operator: string;
+      value: number;
+      unit?: string;
+    }>;
     notifyTargets: {
       low: string;
       lowCountdown: string;
@@ -60,6 +66,12 @@ export interface AlarmRuleItem {
   conditionType: string;
   conditionOperator: string;
   conditionValue: number;
+  policyConditions?: Array<{
+    type: string;
+    operator: string;
+    value: number;
+    unit?: string;
+  }>;
   notifyTargets: {
     low: string;
     lowCountdown: string;
@@ -72,26 +84,39 @@ export interface AlarmRuleItem {
   effectivePeriod: '自定义' | '永久' | '联动【加班登记单】实际作业时段';
 }
 
-// 告警策略类型标准枚举选项（包含安全员脱岗告警等核心安监类别）
+// 告警策略类型标准枚举选项（严格对齐《智慧船厂告警策略场景分析配置表_V1》）
 export const ALARM_POLICY_TYPES = [
   '人员进入',
+  '人员禁入',
+  '人数超员',
+  '安全员/监护人脱岗',
+  '连续长时间工作/异常停留',
   '气体告警',
-  '安全帽脱落',
+  '烟雾告警',
+  '标签脱落告警',
+  '标签低电告警',
+  '标签离线告警',
+  '安全帽配戴',
   '厂区吸烟',
   '厂区玩手机',
-  '异常停留',
-  '烟感告警',
-  '安全员脱岗告警'
+  '安全帽脱落', // 兼容历史数据别名
+  '异常停留',   // 兼容历史数据别名
+  '烟感告警',   // 兼容历史数据别名
+  '安全员脱岗告警' // 兼容历史数据别名
 ] as const;
 
 export type AlarmPolicyType = typeof ALARM_POLICY_TYPES[number];
 
-// 区域范围标准枚举选项（作业面、有限空间、机舱内、电子围栏 4 大空间范围类）
+// 区域范围标准枚举选项（涵盖作业面、有限空间、电子围栏、机舱内、主基站、气体探测器、烟雾报警器、摄像头等）
 export const ALARM_AREA_TYPES = [
   '作业面',
   '有限空间',
+  '电子围栏',
   '机舱内',
-  '电子围栏'
+  '主基站',
+  '气体探测器',
+  '烟雾报警器',
+  '摄像头'
 ] as const;
 
 export type AlarmAreaType = typeof ALARM_AREA_TYPES[number];

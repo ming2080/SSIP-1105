@@ -148,6 +148,29 @@ export function TagDetailModal({
               </div>
             </div>
 
+            {/* 脱落状态 */}
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 flex items-center gap-1.5">
+                <Radio className="w-3.5 h-3.5 text-slate-400" />
+                防拆脱落状态
+              </span>
+              <div>
+                {tag.detachStatus === 'detached' ? (
+                  <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded-sm border border-rose-200">
+                    标签已脱落 (防拆触点断开)
+                  </span>
+                ) : isUsed && isOnline ? (
+                  <span className="text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded-sm border border-emerald-200">
+                    佩戴正常
+                  </span>
+                ) : (
+                  <span className="text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-sm">
+                    未佩戴 / 正常
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* 最后更新时间 */}
             <div className="flex items-center justify-between">
               <span className="text-slate-500 flex items-center gap-1.5">

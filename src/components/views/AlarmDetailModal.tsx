@@ -220,9 +220,19 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
               <span className="text-slate-400 text-xs block mb-1">策略判断阈值与规则</span>
-              <div className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-2 py-1.5 rounded border border-slate-200/80">
-                {snapshot.conditionType} {snapshot.conditionOperator} {snapshot.conditionValue}
-              </div>
+              {snapshot.policyConditions && snapshot.policyConditions.length > 0 ? (
+                <div className="space-y-1">
+                  {snapshot.policyConditions.map((pc, idx) => (
+                    <div key={idx} className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-2 py-1 rounded border border-slate-200/80">
+                      {pc.type} {pc.operator} {pc.value} {pc.unit || ''}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-2 py-1.5 rounded border border-slate-200/80">
+                  {snapshot.conditionType} {snapshot.conditionOperator} {snapshot.conditionValue}
+                </div>
+              )}
             </div>
           </div>
 
@@ -241,8 +251,6 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
                       <span className={`font-semibold px-2 py-0.5 rounded border text-[11px] ${
                         cond.type === '有限空间'
                           ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : cond.type === '机舱内'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
                           : cond.type === '电子围栏'
                           ? 'bg-rose-50 text-rose-700 border-rose-200'
                           : 'bg-sky-50 text-sky-700 border-sky-200'
@@ -251,13 +259,15 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
                       </span>
                       <span className="text-slate-400">·</span>
                       <span className="font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]">
-                        {cond.relation === '否' ? '排除(否)' : '包含(是)'}
+                        {(cond.relation === '否' || cond.relation === '不是') ? '排除(不是)' : '包含(是)'}
                       </span>
-                      <span className="font-bold text-slate-800">{cond.target || '全部区域'}</span>
+                      <span className="font-bold text-slate-800 truncate">{cond.target || '全部区域'}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-slate-400 text-xs italic">全厂区所有作业区域</div>
+                  <div className="text-slate-500 text-xs italic bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    全厂全域实时监测（无需配置区域限制）
+                  </div>
                 )}
               </div>
             </div>

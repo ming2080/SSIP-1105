@@ -86,7 +86,6 @@ const MENU_STRUCTURE: MenuItem[] = [
       { id: 'alarm_analysis', label: '告警分析', icon: BarChart3 },
       { id: 'alarms', label: '告警策略', icon: BellRing },
       { id: 'alarm_records', label: '告警处置', icon: ClipboardCheck },
-      { id: 'fence', label: '电子围栏', icon: Shield },
     ] 
   },
   { 
@@ -105,6 +104,7 @@ const MENU_STRUCTURE: MenuItem[] = [
     children: [
       { id: 'workface_screen', label: '作业看板', icon: Tv },
       { id: 'workface_config', label: '区域划分', icon: SlidersHorizontal },
+      { id: 'fence', label: '电子围栏', icon: Shield },
     ]
   },
   { 
