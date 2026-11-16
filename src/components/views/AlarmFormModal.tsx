@@ -129,24 +129,19 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
   '气体告警': [
     { areaType: '气体探测器', targets: YARD_GAS_DETECTORS }
   ],
-  '烟雾告警': [
-    { areaType: '烟雾报警器', targets: YARD_SMOKE_DETECTORS }
-  ],
   '烟感告警': [
     { areaType: '烟雾报警器', targets: YARD_SMOKE_DETECTORS }
   ],
-
-  // 2. 人员行为与定位管控类：唯有这组才有 厂区作业面、有限空间、电子围栏（以及主基站）
-  '人员进入': [
-    { areaType: '作业面', targets: YARD_WORKFACES },
-    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) },
-    { areaType: '电子围栏', targets: YARD_ELECTRONIC_FENCES },
-    { areaType: '主基站', targets: YARD_BASE_STATIONS }
+  '烟雾告警': [
+    { areaType: '烟雾报警器', targets: YARD_SMOKE_DETECTORS }
   ],
+
+  // 2. 人员行为与定位管控类
   '人员禁入': [
     { areaType: '电子围栏', targets: YARD_ELECTRONIC_FENCES },
     { areaType: '作业面', targets: YARD_WORKFACES },
-    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) }
+    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) },
+    { areaType: '主基站', targets: YARD_BASE_STATIONS }
   ],
   '人数超员': [
     { areaType: '作业面', targets: YARD_WORKFACES },
@@ -154,24 +149,16 @@ export const POLICY_TYPE_AREA_MAP: Record<string, AreaOptionConfig[]> = {
     { areaType: '电子围栏', targets: YARD_ELECTRONIC_FENCES }
   ],
   '安全员/监护人脱岗': [
-    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) },
-    { areaType: '作业面', targets: YARD_WORKFACES },
-    { areaType: '电子围栏', targets: YARD_ELECTRONIC_FENCES }
+    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) }
   ],
   '安全员脱岗告警': [
-    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) },
-    { areaType: '作业面', targets: YARD_WORKFACES },
-    { areaType: '电子围栏', targets: YARD_ELECTRONIC_FENCES }
+    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) }
   ],
   '连续长时间工作/异常停留': [
-    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) },
-    { areaType: '作业面', targets: YARD_WORKFACES },
-    { areaType: '电子围栏', targets: YARD_ELECTRONIC_FENCES }
+    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) }
   ],
   '异常停留': [
-    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) },
-    { areaType: '作业面', targets: YARD_WORKFACES },
-    { areaType: '电子围栏', targets: YARD_ELECTRONIC_FENCES }
+    { areaType: '有限空间', targets: MOCK_PROJECTS.map(p => p.name) }
   ],
 
   // 3. 智能标签状态类：明确不需要选择区域范围（空数组，界面不渲染区域选择项）
@@ -201,100 +188,95 @@ export interface PolicyConditionConfig {
   defaultValue: number;
   unit: string;
   helpText: string;
+  isTimeRangeOnly?: boolean;
 }
 
 // 策略条件动态联动字典
 export const POLICY_CONDITION_CONFIGS: Record<string, PolicyConditionConfig> = {
   '气体告警': {
-    conditionTypes: ['可燃气体超标浓度(LEL)', '氧气浓度异常(VOL%)', '有毒有害气体浓度(PPM)'],
-    operators: ['大于等于', '大于', '小于等于'],
-    defaultValue: 20,
-    unit: '%LEL',
-    helpText: '当气体探测器检测到气体浓度超出设定阈值时触发报警'
-  },
-  '烟雾告警': {
-    conditionTypes: ['烟雾火情浓度感应值', '感温探测温升速率'],
-    operators: ['大于等于', '大于'],
-    defaultValue: 30,
-    unit: '%/m',
-    helpText: '当烟雾传感器达到报警浓度阈值或感温探头温升过快时触发'
+    conditionTypes: [],
+    operators: [],
+    defaultValue: 0,
+    unit: '',
+    helpText: '由气体探测器设备自身浓度阈值自动触发告警，无需额外设置策略条件'
   },
   '烟感告警': {
-    conditionTypes: ['烟雾火情浓度感应值', '感温探测温升速率'],
-    operators: ['大于等于', '大于'],
-    defaultValue: 30,
-    unit: '%/m',
-    helpText: '当烟雾传感器达到报警浓度阈值或感温探头温升过快时触发'
+    conditionTypes: [],
+    operators: [],
+    defaultValue: 0,
+    unit: '',
+    helpText: '由烟雾报警器设备自身火情探测阈值自动触发告警，无需额外设置策略条件'
   },
-  '人员进入': {
-    conditionTypes: ['告警时段进入', '未持有限空间作业票进入', '非授权工种/班组进入'],
-    operators: ['存在', '等于', '包含'],
-    defaultValue: 1,
-    unit: '次',
-    helpText: '监测非允许时段或未取得对应作业票资质人员进入管控区域'
+  '烟雾告警': {
+    conditionTypes: [],
+    operators: [],
+    defaultValue: 0,
+    unit: '',
+    helpText: '由烟雾报警器设备自身火情探测阈值自动触发告警，无需额外设置策略条件'
   },
   '人员禁入': {
-    conditionTypes: ['非法闯入禁入警戒区', '受限禁闭区域闯入', '吊装落物红线越界'],
-    operators: ['存在', '等于'],
+    conditionTypes: ['告警时段'],
+    operators: ['处于时段'],
     defaultValue: 1,
-    unit: '次',
-    helpText: '当人员进入明确禁止入内的受控电子围栏或作业面时即时报警'
+    unit: '时段',
+    isTimeRangeOnly: true,
+    helpText: '电子围栏、有限空间、作业面及主基站区域均按所设告警时段触发人员禁入告警'
   },
   '人数超员': {
-    conditionTypes: ['作业面/受限舱室超员持续时长', '超额核定人数差值'],
+    conditionTypes: ['持续时长'],
     operators: ['大于等于', '大于'],
     defaultValue: 5,
     unit: '分钟',
-    helpText: '超出作业票核定或区域承载上限人数并持续设定时间'
+    helpText: '超出区域核定人数并持续达到设定时长后触发超员告警'
   },
   '安全员/监护人脱岗': {
-    conditionTypes: ['脱岗离岗时间', '脱离指定监护区域时长'],
+    conditionTypes: ['脱岗离岗时长'],
     operators: ['大于等于', '大于'],
     defaultValue: 10,
     unit: '分钟',
-    helpText: '特种作业/有限空间作业期间，安全监护人员离开作业面超过设定时间'
+    helpText: '有限空间作业期间，作业票关联的安全监护人员离开监护范围超过设定脱岗离岗时长'
   },
   '安全员脱岗告警': {
-    conditionTypes: ['脱岗离岗时间', '脱离指定监护区域时长'],
+    conditionTypes: ['脱岗离岗时长'],
     operators: ['大于等于', '大于'],
     defaultValue: 10,
     unit: '分钟',
-    helpText: '特种作业/有限空间作业期间，安全监护人员离开作业面超过设定时间'
+    helpText: '有限空间作业期间，作业票关联的安全监护人员离开监护范围超过设定脱岗离岗时长'
   },
   '连续长时间工作/异常停留': {
     conditionTypes: ['同一区域停留时长', '静止不活动时长(晕厥/受困预警)'],
     operators: ['大于等于', '大于'],
     defaultValue: 120,
     unit: '分钟',
-    helpText: '工人在有限空间或作业面滞留超时，或定位标签无位移可能发生意外'
+    helpText: '有限空间内作业票关联人员滞留超时，或定位标签无位移可能发生意外'
   },
   '异常停留': {
     conditionTypes: ['同一区域停留时长', '静止不活动时长(晕厥/受困预警)'],
     operators: ['大于等于', '大于'],
     defaultValue: 120,
     unit: '分钟',
-    helpText: '工人在有限空间或作业面滞留超时，或定位标签无位移可能发生意外'
+    helpText: '有限空间内作业票关联人员滞留超时，或定位标签无位移可能发生意外'
   },
   '标签脱落告警': {
-    conditionTypes: ['防拆触点脱落次数', '标签脱落持续时间'],
-    operators: ['等于', '大于等于'],
-    defaultValue: 1,
-    unit: '次',
-    helpText: '定位安全帽/胸牌防拆触点弹开，判定标签已脱离人体'
+    conditionTypes: [],
+    operators: [],
+    defaultValue: 0,
+    unit: '',
+    helpText: '标签防拆触点弹开即触发告警，无需设置人员范围及策略条件'
   },
   '标签低电告警': {
-    conditionTypes: ['电池剩余电量百分比', '低电量触发状态'],
-    operators: ['小于等于', '等于'],
-    defaultValue: 15,
-    unit: '%',
-    helpText: '标签电池电量低于设定安全阈值时触发充电预警'
+    conditionTypes: [],
+    operators: [],
+    defaultValue: 0,
+    unit: '',
+    helpText: '标签电量低于系统安全阈值即触发告警，无需设置人员范围及策略条件'
   },
   '标签离线告警': {
-    conditionTypes: ['连续离线天数', '离线失联时长'],
+    conditionTypes: ['连接失联时长'],
     operators: ['大于等于', '大于'],
-    defaultValue: 5,
-    unit: '天',
-    helpText: '基站连续未收到标签心跳信号超过设定时间'
+    defaultValue: 2,
+    unit: '小时',
+    helpText: '基站连续未收到标签心跳信号达到设定失联时长(小时)后触发告警'
   },
   '安全帽配戴': {
     conditionTypes: ['未配戴安全帽违规检测数', '未戴安全帽持续帧数'],
@@ -326,19 +308,30 @@ export const POLICY_CONDITION_CONFIGS: Record<string, PolicyConditionConfig> = {
   }
 };
 
+// 历史兼容类型归一化映射（含已删除的“人员进入”迁移至“人员禁入”）
+const POLICY_TYPE_ALIAS_MAP: Record<string, string> = {
+  '人员进入': '人员禁入',
+  '烟雾告警': '烟感告警',
+  '安全员脱岗告警': '安全员/监护人脱岗',
+  '异常停留': '连续长时间工作/异常停留',
+  '安全帽脱落': '安全帽配戴'
+};
+
 // 获取今天的日期字符串 YYYYMMDD
 export function getTodayDateStr(date: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
 }
 
-// 策略单条条件项定义（支持多条件组合）
+// 策略单条条件项定义（支持多条件组合与告警时段）
 export interface PolicyConditionItem {
   id: string;
   type: string;
   operator: string;
   value: number;
   unit: string;
+  timeStart?: string;
+  timeEnd?: string;
 }
 
 interface AlarmFormModalProps {
@@ -353,7 +346,7 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
 
   // 表单字段状态
   const [name, setName] = useState('');
-  const [type, setType] = useState('人员进入');
+  const [type, setType] = useState('人员禁入');
   
   // 区域范围条件列表 (支持多条件组合，作业面多选、船舶建造项目多选)
   const [areaConditions, setAreaConditions] = useState<Array<{
@@ -364,7 +357,7 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
     selectedTargets?: string[];
     selectedProjectIds?: string[]; // 有限空间时多选的船舶项目ID列表
   }>>([
-    { type: '作业面', relation: '是', target: '全部作业面', scopeMode: 'all', selectedTargets: [] }
+    { type: '电子围栏', relation: '是', target: YARD_ELECTRONIC_FENCES[0] }
   ]);
 
   // 人员范围条件列表 (严格限定：只对应工种或班组，选择是或不是两种范围，每种类型只能添加一次)
@@ -380,10 +373,12 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
   const [policyConditions, setPolicyConditions] = useState<PolicyConditionItem[]>([
     {
       id: 'cond-1',
-      type: '告警时段进入',
-      operator: '存在',
+      type: '告警时段',
+      operator: '00:00 ~ 23:59',
       value: 1,
-      unit: '次'
+      unit: '时段',
+      timeStart: '00:00',
+      timeEnd: '23:59'
     }
   ]);
 
@@ -436,6 +431,14 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
   const availableAreaConfigs = POLICY_TYPE_AREA_MAP[type] || [];
   // 是否为不需要选择区域范围的策略类型（例如智能标签状态类）
   const isNoAreaNeeded = availableAreaConfigs.length === 0;
+  // 动态控制人员范围与策略条件显隐及作业票联动规则
+  const isEnvSensorType = ['气体告警', '烟感告警', '烟雾告警'].includes(type);
+  const isGuardianOffType = ['安全员/监护人脱岗', '安全员脱岗告警'].includes(type);
+  const isOverstayType = ['连续长时间工作/异常停留', '异常停留'].includes(type);
+  const isWorkPermitLinkedPerson = isGuardianOffType || isOverstayType;
+  const isTagStatusType = ['标签脱落告警', '标签低电告警', '标签离线告警'].includes(type);
+  const isPersonScopeHidden = isEnvSensorType || type === '人数超员' || isTagStatusType;
+  const isPolicyConditionHidden = isEnvSensorType || type === '标签脱落告警' || type === '标签低电告警';
 
   // 当 editRule 发生变化时，回填表单
   useEffect(() => {
@@ -444,7 +447,8 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
       if (editRule) {
         // 编辑模式回填
         setName(editRule.name || '');
-        const currentType = editRule.type || '人员进入';
+        const rawType = editRule.type || '人员禁入';
+        const currentType = POLICY_TYPE_ALIAS_MAP[rawType] || rawType;
         setType(currentType);
         
         // 区域范围回填
@@ -453,7 +457,6 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
           // 智能标签类，无需区域范围
           setAreaConditions([]);
         } else if (editRule.areaConditions && editRule.areaConditions.length > 0) {
-          // 滤掉机舱动力区等历史废弃区域类型
           const parsed = editRule.areaConditions
             .filter(c => validAreaCfgs.some(cfg => cfg.areaType === c.type))
             .map(c => {
@@ -467,7 +470,6 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                   target: isAll ? '全部作业面' : (extractedTargets.length > 0 ? extractedTargets.join('、') : '全部作业面')
                 };
               } else if (c.type === '有限空间') {
-                // 有限空间：只对应船舶建造项目多选
                 let prjIds: string[] = [];
                 if (c.selectedTargets && c.selectedTargets.length > 0) {
                   prjIds = c.selectedTargets.map(t => {
@@ -475,7 +477,6 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                     return found ? found.id : t;
                   });
                 } else if (c.target) {
-                  // 从 target 中解析项目名
                   const matchedProjects = MOCK_PROJECTS.filter(p => c.target.includes(p.name));
                   prjIds = matchedProjects.map(p => p.id);
                 }
@@ -493,17 +494,41 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
               return { ...c };
             });
 
-          setAreaConditions(parsed.length > 0 ? parsed : [{
-            type: validAreaCfgs[0].areaType,
-            relation: '是',
-            target: validAreaCfgs[0].targets[0] || ''
-          }]);
+          if (parsed.length > 0) {
+            setAreaConditions(parsed);
+          } else {
+            const firstCfg = validAreaCfgs[0];
+            if (firstCfg.areaType === '有限空间') {
+              setAreaConditions([{
+                type: '有限空间',
+                relation: '是',
+                selectedProjectIds: [MOCK_PROJECTS[0].id],
+                target: MOCK_PROJECTS[0].name
+              }]);
+            } else {
+              setAreaConditions([{
+                type: firstCfg.areaType,
+                relation: '是',
+                target: firstCfg.targets[0] || ''
+              }]);
+            }
+          }
         } else {
-          setAreaConditions([{
-            type: validAreaCfgs[0].areaType,
-            relation: '是',
-            target: validAreaCfgs[0].targets[0] || ''
-          }]);
+          const firstCfg = validAreaCfgs[0];
+          if (firstCfg.areaType === '有限空间') {
+            setAreaConditions([{
+              type: '有限空间',
+              relation: '是',
+              selectedProjectIds: [MOCK_PROJECTS[0].id],
+              target: MOCK_PROJECTS[0].name
+            }]);
+          } else {
+            setAreaConditions([{
+              type: firstCfg.areaType,
+              relation: '是',
+              target: firstCfg.targets[0] || ''
+            }]);
+          }
         }
 
         // 人员范围回填：仅限工种类别或作业班组，是或不是
@@ -512,6 +537,7 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
           const sanitizedPersons: Array<{ scope: '工种类别' | '作业班组'; relation: '是' | '不是'; target: string }> = [];
 
           editRule.personConditions.forEach(c => {
+            if (c.scope === '作业票关联') return;
             const scopeVal: '工种类别' | '作业班组' = (c.scope === '作业班组') ? '作业班组' : '工种类别';
             if (!usedScopes.has(scopeVal)) {
               usedScopes.add(scopeVal);
@@ -539,21 +565,49 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
           setPersonConditions([{ scope: '工种类别', relation: '是', target: SHIPYARD_WORK_TYPES[0] }]);
         }
 
-        // 策略条件回填（支持多条件组合）
+        // 策略条件回填
         const condConfig = getCurrentPolicyConditionConfig(currentType);
-        if (editRule.policyConditions && editRule.policyConditions.length > 0) {
-          setPolicyConditions(editRule.policyConditions.map((pc, idx) => ({
-            id: `cond-${Date.now()}-${idx}`,
-            type: pc.type || condConfig.conditionTypes[0],
-            operator: pc.operator || condConfig.operators[0],
-            value: pc.value ?? condConfig.defaultValue,
-            unit: pc.unit || condConfig.unit
-          })));
-        } else {
+        if (condConfig.conditionTypes.length === 0) {
+          setPolicyConditions([]);
+        } else if (condConfig.isTimeRangeOnly) {
+          const existing = editRule.policyConditions?.[0];
           setPolicyConditions([{
             id: 'cond-1',
-            type: editRule.conditionType || condConfig.conditionTypes[0],
-            operator: editRule.conditionOperator || condConfig.operators[0],
+            type: '告警时段',
+            operator: existing?.operator && existing.operator.includes('~') ? existing.operator : '00:00 ~ 23:59',
+            value: 1,
+            unit: '时段',
+            timeStart: existing?.timeStart || '00:00',
+            timeEnd: existing?.timeEnd || '23:59'
+          }]);
+        } else if (editRule.policyConditions && editRule.policyConditions.length > 0) {
+          const matched = editRule.policyConditions
+            .filter(pc => condConfig.conditionTypes.includes(pc.type))
+            .map((pc, idx) => ({
+              id: `cond-${Date.now()}-${idx}`,
+              type: pc.type,
+              operator: condConfig.operators.includes(pc.operator) ? pc.operator : (condConfig.operators[0] || '大于等于'),
+              value: pc.value ?? condConfig.defaultValue,
+              unit: condConfig.unit || pc.unit || ''
+            }));
+          setPolicyConditions(matched.length > 0 ? matched : [{
+            id: 'cond-1',
+            type: condConfig.conditionTypes[0],
+            operator: condConfig.operators[0] || '大于等于',
+            value: condConfig.defaultValue,
+            unit: condConfig.unit
+          }]);
+        } else {
+          const validType = condConfig.conditionTypes.includes(editRule.conditionType)
+            ? editRule.conditionType
+            : condConfig.conditionTypes[0];
+          const validOp = condConfig.operators.includes(editRule.conditionOperator)
+            ? editRule.conditionOperator
+            : (condConfig.operators[0] || '大于等于');
+          setPolicyConditions([{
+            id: 'cond-1',
+            type: validType,
+            operator: validOp,
             value: editRule.conditionValue ?? condConfig.defaultValue,
             unit: condConfig.unit
           }]);
@@ -589,19 +643,17 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
         setStatus(editRule.status || '启用');
         setChangeNotes(`调整告警参数，更新至 ${nextVersionId}`);
       } else {
-        // 新建模式初始化
-        const initialType = '人员进入';
+        // 新建模式初始化：默认人员禁入
+        const initialType = '人员禁入';
         setType(initialType);
         const todayStr = getTodayDateStr();
         setName(`${initialType}_${todayStr}`);
         
-        // 初始区域条件：人员进入支持作业面
+        // 初始区域条件：人员禁入默认电子围栏
         setAreaConditions([{ 
-          type: '作业面', 
+          type: '电子围栏', 
           relation: '是', 
-          target: '全部作业面', 
-          scopeMode: 'all', 
-          selectedTargets: [] 
+          target: YARD_ELECTRONIC_FENCES[0] 
         }]);
 
         // 初始人员范围：工种类别
@@ -611,14 +663,15 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
           target: SHIPYARD_WORK_TYPES[0] 
         }]);
 
-        // 初始策略条件
-        const condConfig = getCurrentPolicyConditionConfig(initialType);
+        // 初始策略条件：告警时段
         setPolicyConditions([{
           id: 'cond-1',
-          type: condConfig.conditionTypes[0],
-          operator: condConfig.operators[0],
-          value: condConfig.defaultValue,
-          unit: condConfig.unit
+          type: '告警时段',
+          operator: '00:00 ~ 23:59',
+          value: 1,
+          unit: '时段',
+          timeStart: '00:00',
+          timeEnd: '23:59'
         }]);
 
         setLowTarget('当班区域安全员');
@@ -683,13 +736,27 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
 
     // 策略条件联动重置
     const condConfig = getCurrentPolicyConditionConfig(selectedType);
-    setPolicyConditions([{
-      id: `cond-${Date.now()}`,
-      type: condConfig.conditionTypes[0],
-      operator: condConfig.operators[0],
-      value: condConfig.defaultValue,
-      unit: condConfig.unit
-    }]);
+    if (condConfig.conditionTypes.length === 0) {
+      setPolicyConditions([]);
+    } else if (condConfig.isTimeRangeOnly) {
+      setPolicyConditions([{
+        id: `cond-${Date.now()}`,
+        type: '告警时段',
+        operator: '00:00 ~ 23:59',
+        value: 1,
+        unit: '时段',
+        timeStart: '00:00',
+        timeEnd: '23:59'
+      }]);
+    } else {
+      setPolicyConditions([{
+        id: `cond-${Date.now()}`,
+        type: condConfig.conditionTypes[0],
+        operator: condConfig.operators[0] || '大于等于',
+        value: condConfig.defaultValue,
+        unit: condConfig.unit
+      }]);
+    }
   };
 
   // 添加区域条件（每种区域范围类型在同一个告警策略中只能选择一次）
@@ -789,6 +856,19 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
       return;
     }
 
+    if (!isNoAreaNeeded) {
+      for (const cond of areaConditions) {
+        if (cond.type === '有限空间' && (!cond.selectedProjectIds || cond.selectedProjectIds.length === 0)) {
+          setErrorMsg('请至少选择一个有限空间对应的船舶建造项目');
+          return;
+        }
+        if (cond.type === '作业面' && cond.scopeMode === 'custom' && (!cond.selectedTargets || cond.selectedTargets.length === 0)) {
+          setErrorMsg('请至少勾选一个厂区作业面，或切换为全部作业面');
+          return;
+        }
+      }
+    }
+
     const now = new Date();
     const formattedNow = formatDateTime(now);
 
@@ -839,18 +919,41 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
             target: cond.target
           };
         }),
-      personConditions: personConditions.filter(c => c.scope && c.target),
+      personConditions: isPersonScopeHidden
+        ? []
+        : isWorkPermitLinkedPerson
+          ? [{
+              scope: '作业票关联',
+              relation: '是',
+              target: isGuardianOffType ? '有限空间作业票指定安全员/监护人' : '有限空间作业票登记作业人员'
+            }]
+          : personConditions.filter(c => c.scope && c.target),
       // 主条件保持与首个策略条件一致，向下兼容
-      conditionType: policyConditions[0]?.type || currentConditionConfig.conditionTypes[0],
-      conditionOperator: policyConditions[0]?.operator || '大于等于',
-      conditionValue: policyConditions[0]?.value ?? currentConditionConfig.defaultValue,
+      conditionType: isPolicyConditionHidden
+        ? '设备阈值自动触发'
+        : (policyConditions[0]?.type || currentConditionConfig.conditionTypes[0] || ''),
+      conditionOperator: isPolicyConditionHidden
+        ? '自动监测'
+        : (currentConditionConfig.isTimeRangeOnly
+            ? `${policyConditions[0]?.timeStart || '00:00'} ~ ${policyConditions[0]?.timeEnd || '23:59'}`
+            : (policyConditions[0]?.operator || '大于等于')),
+      conditionValue: isPolicyConditionHidden
+        ? 0
+        : (policyConditions[0]?.value ?? currentConditionConfig.defaultValue),
       // 保存完整的多策略条件
-      policyConditions: policyConditions.map(pc => ({
-        type: pc.type,
-        operator: pc.operator,
-        value: pc.value,
-        unit: pc.unit
-      })),
+      policyConditions: isPolicyConditionHidden
+        ? []
+        : policyConditions.map(pc => ({
+            type: pc.type,
+            operator: currentConditionConfig.isTimeRangeOnly
+              ? `${pc.timeStart || '00:00'} ~ ${pc.timeEnd || '23:59'}`
+              : pc.operator,
+            value: pc.value,
+            unit: pc.unit,
+            ...(currentConditionConfig.isTimeRangeOnly
+              ? { timeStart: pc.timeStart || '00:00', timeEnd: pc.timeEnd || '23:59' }
+              : {})
+          })),
       notifyTargets: {
         low: lowTarget,
         lowCountdown: lowCdFormatted,
@@ -980,7 +1083,7 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                 )}
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                根据告警策略场景分析配置表，动态联动区域范围、人员范围与策略条件（已选类型不可重复添加）
+                根据所选告警策略类型，动态联动区域范围、人员关联方式及触发条件设置
               </p>
             </div>
           </div>
@@ -1026,18 +1129,17 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                   className="w-full px-3 py-2 border-2 border-blue-400/70 rounded-xl text-slate-800 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-[13px] bg-white cursor-pointer font-bold shadow-xs"
                 >
                   <option value="" disabled hidden>请选择策略类型</option>
-                  <optgroup label="1. 环境感知与安防类 (仅对应探测器设备)">
+                  <optgroup label="1. 环境感知与安防类 (仅配置探测器设备)">
                     <option value="气体告警">气体告警 (气体探测器)</option>
-                    <option value="烟雾告警">烟雾告警 (烟雾报警器)</option>
+                    <option value="烟感告警">烟感告警 (烟雾报警器)</option>
                   </optgroup>
-                  <optgroup label="2. 人员行为与定位管控类 (对应厂区作业面、有限空间、电子围栏)">
-                    <option value="人员进入">人员进入 (作业面/有限空间/电子围栏/主基站)</option>
-                    <option value="人员禁入">人员禁入 (电子围栏/作业面/有限空间)</option>
-                    <option value="人数超员">人数超员 (作业面/有限空间/电子围栏)</option>
-                    <option value="安全员/监护人脱岗">安全员/监护人脱岗 (有限空间/作业面/电子围栏)</option>
-                    <option value="连续长时间工作/异常停留">连续长时间工作/异常停留 (有限空间/作业面/电子围栏)</option>
+                  <optgroup label="2. 人员行为与定位管控类 (作业面、有限空间、电子围栏、主基站)">
+                    <option value="人员禁入">人员禁入 (电子围栏/作业面/有限空间/主基站)</option>
+                    <option value="人数超员">人员超员 (作业面/有限空间/电子围栏)</option>
+                    <option value="安全员/监护人脱岗">安全员/监护人脱岗 (仅限有限空间)</option>
+                    <option value="连续长时间工作/异常停留">连续长时间工作/异常停留 (仅限有限空间)</option>
                   </optgroup>
-                  <optgroup label="3. 智能标签状态类 (全域监测，无需配置区域范围)">
+                  <optgroup label="3. 智能标签状态类 (全域监测，无需配置区域及人员范围)">
                     <option value="标签脱落告警">标签脱落告警</option>
                     <option value="标签低电告警">标签低电告警</option>
                     <option value="标签离线告警">标签离线告警</option>
@@ -1601,240 +1703,334 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
             </div>
           </div>
 
-          {/* 业务要素3：人员范围 (保留工种和班组选择，删除提示行，每种类型添加后不可重复添加) */}
-          <div className="flex items-start">
-            <label className="w-28 text-right pr-4 pt-2 text-slate-700 shrink-0 font-bold flex items-center justify-end gap-1">
-              <Users className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-red-500 mr-0.5">*</span>人员范围:
-            </label>
-            <div className="flex-1 space-y-2.5">
-              {personConditions.map((cond, idx) => {
-                const targetOptions = cond.scope === '工种类别' ? SHIPYARD_WORK_TYPES : SHIPYARD_WORK_TEAMS;
-
-                return (
-                  <div key={idx} className="flex items-center gap-2.5 p-2 bg-slate-50/70 border border-slate-200 rounded-xl">
-                    {/* 范围维度选择：工种类别 / 作业班组（已被其它行添加的变为不可选） */}
-                    <select 
-                      value={cond.scope}
-                      onChange={(e) => {
-                        const updated = [...personConditions];
-                        const newScope = e.target.value as '工种类别' | '作业班组';
-                        const newOptions = newScope === '工种类别' ? SHIPYARD_WORK_TYPES : SHIPYARD_WORK_TEAMS;
-                        updated[idx] = {
-                          ...updated[idx],
-                          scope: newScope,
-                          target: newOptions[0]
-                        };
-                        setPersonConditions(updated);
-                      }}
-                      className="w-36 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 font-bold focus:outline-none focus:border-blue-500 text-[13px] bg-white cursor-pointer"
-                    >
-                      {(['工种类别', '作业班组'] as const).map(scopeOpt => {
-                        const isUsed = personConditions.some((c, i) => i !== idx && c.scope === scopeOpt);
-                        return (
-                          <option key={scopeOpt} value={scopeOpt} disabled={isUsed}>
-                            {scopeOpt === '工种类别' ? '🛠️ 工种类别' : '👥 作业班组'}
-                            {isUsed ? ' (已添加)' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-
-                    {/* 关系筛选：只允许“是”与“不是”两种范围 */}
-                    <select 
-                      value={cond.relation}
-                      onChange={(e) => {
-                        const updated = [...personConditions];
-                        updated[idx].relation = e.target.value as '是' | '不是';
-                        setPersonConditions(updated);
-                      }}
-                      className={`w-32 px-3 py-1.5 border rounded-lg text-[13px] bg-white font-bold cursor-pointer ${
-                        cond.relation === '是' 
-                          ? 'border-emerald-300 text-emerald-700 bg-emerald-50/30' 
-                          : 'border-rose-300 text-rose-700 bg-rose-50/30'
-                      }`}
-                    >
-                      <option value="是">是 (包含此类)</option>
-                      <option value="不是">不是 (排除此类)</option>
-                    </select>
-
-                    {/* 目标工种或班组下拉列表 */}
-                    <select 
-                      value={cond.target}
-                      onChange={(e) => {
-                        const updated = [...personConditions];
-                        updated[idx].target = e.target.value;
-                        setPersonConditions(updated);
-                      }}
-                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-medium cursor-pointer"
-                    >
-                      <option value="" disabled hidden>
-                        {cond.scope === '工种类别' ? '请选择工种' : '请选择作业班组'}
-                      </option>
-                      {targetOptions.map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-
-                    {personConditions.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePersonCondition(idx)}
-                        className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
-                        title="删除此人员过滤条件"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* 添加人员条件按钮：工种和班组各限一次，最多 2 条 */}
-              {canAddPersonCondition && (
-                <button
-                  type="button"
-                  onClick={handleAddPersonCondition}
-                  className="flex items-center gap-1 text-[#1677ff] bg-[#e6f4ff] hover:bg-[#bae0ff] border border-[#91caff] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors mt-1 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" /> 添加（并且）人员过滤条件
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* 业务要素4：策略条件 (支持添加多条，每种策略条件只能被添加设置一次，已配置过的不可重复添加) */}
-          <div className="flex items-start">
-            <label className="w-28 text-right pr-4 pt-2 text-slate-700 shrink-0 font-bold flex items-center justify-end gap-1">
-              <ShieldAlert className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-red-500 mr-0.5">*</span>策略条件:
-            </label>
-            <div className="flex-1 space-y-2.5">
-              {policyConditions.map((condItem, idx) => (
-                <div key={condItem.id} className="p-2.5 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
-                  <div className="flex items-center gap-2.5">
-                    {/* 1. 条件类型 (随策略类型联动；已配置过的变为 disabled 不可再重复添加) */}
-                    <select 
-                      value={condItem.type}
-                      onChange={(e) => {
-                        const newType = e.target.value;
-                        const updated = [...policyConditions];
-                        updated[idx] = {
-                          ...updated[idx],
-                          type: newType
-                        };
-                        setPolicyConditions(updated);
-                      }}
-                      className="flex-1 px-3 py-2 border-2 border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-bold cursor-pointer"
-                    >
-                      {currentConditionConfig.conditionTypes.map(cType => {
-                        const isUsed = policyConditions.some((c, i) => i !== idx && c.type === cType);
-                        return (
-                          <option key={cType} value={cType} disabled={isUsed}>
-                            {cType} {isUsed ? '(已配置)' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-
-                    {/* 2. 判定规则算子 */}
-                    <select 
-                      value={condItem.operator}
-                      onChange={(e) => {
-                        const updated = [...policyConditions];
-                        updated[idx] = {
-                          ...updated[idx],
-                          operator: e.target.value
-                        };
-                        setPolicyConditions(updated);
-                      }}
-                      className="w-36 px-3 py-2 border-2 border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-bold cursor-pointer"
-                    >
-                      {currentConditionConfig.operators.map(op => (
-                        <option key={op} value={op}>{op}</option>
-                      ))}
-                    </select>
-
-                    {/* 3. 设置值步进器与单位 */}
-                    <div className="flex items-center border-2 border-slate-200 rounded-xl overflow-hidden shrink-0 bg-white shadow-2xs">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = [...policyConditions];
-                          updated[idx] = {
-                            ...updated[idx],
-                            value: Math.max(0, condItem.value - 1)
-                          };
-                          setPolicyConditions(updated);
-                        }}
-                        className="px-2.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border-r border-slate-200 transition-colors cursor-pointer"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <input 
-                        type="number"
-                        value={condItem.value}
-                        onChange={(e) => {
-                          const updated = [...policyConditions];
-                          updated[idx] = {
-                            ...updated[idx],
-                            value: Number(e.target.value) || 0
-                          };
-                          setPolicyConditions(updated);
-                        }}
-                        className="w-16 py-1.5 text-center text-slate-800 text-[13px] font-mono font-bold focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = [...policyConditions];
-                          updated[idx] = {
-                            ...updated[idx],
-                            value: condItem.value + 1
-                          };
-                          setPolicyConditions(updated);
-                        }}
-                        className="px-2.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border-l border-slate-200 transition-colors cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="px-2.5 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold border-l border-slate-200 select-none">
-                        {condItem.unit || currentConditionConfig.unit}
+          {/* 业务要素3：人员范围（气体/烟感/超员/智能标签三类隐藏；安全员脱岗与异常停留保持与作业票默认关联） */}
+          {!isPersonScopeHidden && (
+            <div className="flex items-start">
+              <label className="w-28 text-right pr-4 pt-2 text-slate-700 shrink-0 font-bold flex items-center justify-end gap-1">
+                <Users className="w-3.5 h-3.5 text-blue-600" />
+                {!isWorkPermitLinkedPerson && <span className="text-red-500 mr-0.5">*</span>}
+                {isWorkPermitLinkedPerson ? '人员关联:' : '人员范围:'}
+              </label>
+              <div className="flex-1 space-y-2.5">
+                {isWorkPermitLinkedPerson ? (
+                  <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center gap-2.5">
+                    <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div>
+                      <span className="font-bold">
+                        {isGuardianOffType ? '默认与有限空间作业票关联' : '保持与作业票的人员默认关联'}
+                      </span>
+                      <span className="text-blue-700 ml-1.5">
+                        {isGuardianOffType
+                          ? '（无需手动设置人员关联，系统将自动关联对应有限空间作业票中指定的值班安全员/监护人）'
+                          : '（无需手动设置人员关联，系统将自动关联对应有限空间作业票下登记的进舱作业人员）'}
                       </span>
                     </div>
+                  </div>
+                ) : (
+                  <>
+                    {personConditions.map((cond, idx) => {
+                      const targetOptions = cond.scope === '工种类别' ? SHIPYARD_WORK_TYPES : SHIPYARD_WORK_TEAMS;
 
-                    {policyConditions.length > 1 && (
+                      return (
+                        <div key={idx} className="flex items-center gap-2.5 p-2 bg-slate-50/70 border border-slate-200 rounded-xl">
+                          {/* 范围维度选择：工种类别 / 作业班组（已被其它行添加的变为不可选） */}
+                          <select 
+                            value={cond.scope}
+                            onChange={(e) => {
+                              const updated = [...personConditions];
+                              const newScope = e.target.value as '工种类别' | '作业班组';
+                              const newOptions = newScope === '工种类别' ? SHIPYARD_WORK_TYPES : SHIPYARD_WORK_TEAMS;
+                              updated[idx] = {
+                                ...updated[idx],
+                                scope: newScope,
+                                target: newOptions[0]
+                              };
+                              setPersonConditions(updated);
+                            }}
+                            className="w-36 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 font-bold focus:outline-none focus:border-blue-500 text-[13px] bg-white cursor-pointer"
+                          >
+                            {(['工种类别', '作业班组'] as const).map(scopeOpt => {
+                              const isUsed = personConditions.some((c, i) => i !== idx && c.scope === scopeOpt);
+                              return (
+                                <option key={scopeOpt} value={scopeOpt} disabled={isUsed}>
+                                  {scopeOpt === '工种类别' ? '🛠️ 工种类别' : '👥 作业班组'}
+                                  {isUsed ? ' (已添加)' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+
+                          {/* 关系筛选：只允许“是”与“不是”两种范围 */}
+                          <select 
+                            value={cond.relation}
+                            onChange={(e) => {
+                              const updated = [...personConditions];
+                              updated[idx].relation = e.target.value as '是' | '不是';
+                              setPersonConditions(updated);
+                            }}
+                            className={`w-32 px-3 py-1.5 border rounded-lg text-[13px] bg-white font-bold cursor-pointer ${
+                              cond.relation === '是' 
+                                ? 'border-emerald-300 text-emerald-700 bg-emerald-50/30' 
+                                : 'border-rose-300 text-rose-700 bg-rose-50/30'
+                            }`}
+                          >
+                            <option value="是">是 (包含此类)</option>
+                            <option value="不是">不是 (排除此类)</option>
+                          </select>
+
+                          {/* 目标工种或班组下拉列表 */}
+                          <select 
+                            value={cond.target}
+                            onChange={(e) => {
+                              const updated = [...personConditions];
+                              updated[idx].target = e.target.value;
+                              setPersonConditions(updated);
+                            }}
+                            className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-medium cursor-pointer"
+                          >
+                            <option value="" disabled hidden>
+                              {cond.scope === '工种类别' ? '请选择工种' : '请选择作业班组'}
+                            </option>
+                            {targetOptions.map(t => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+
+                          {personConditions.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePersonCondition(idx)}
+                              className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+                              title="删除此人员过滤条件"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* 添加人员条件按钮：工种和班组各限一次，最多 2 条 */}
+                    {canAddPersonCondition && (
                       <button
                         type="button"
-                        onClick={() => handleRemovePolicyCondition(condItem.id)}
-                        className="p-2 text-slate-400 hover:text-rose-500 rounded-xl hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
-                        title="删除此策略条件"
+                        onClick={handleAddPersonCondition}
+                        className="flex items-center gap-1 text-[#1677ff] bg-[#e6f4ff] hover:bg-[#bae0ff] border border-[#91caff] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors mt-1 cursor-pointer"
                       >
-                        <X className="w-4 h-4" />
+                        <Plus className="w-3.5 h-3.5" /> 添加（并且）人员过滤条件
                       </button>
                     )}
-                  </div>
-                </div>
-              ))}
-
-              {/* 添加（并且）策略条件按钮：每种策略条件只能被添加设置一次 */}
-              {canAddPolicyCondition && (
-                <button
-                  type="button"
-                  onClick={handleAddPolicyCondition}
-                  className="flex items-center gap-1 text-[#1677ff] bg-[#e6f4ff] hover:bg-[#bae0ff] border border-[#91caff] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors mt-1 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" /> 添加（并且）策略条件
-                </button>
-              )}
-
-              {!canAddPolicyCondition && policyConditions.length > 0 && (
-                <div className="text-[11px] text-slate-400 italic pt-0.5">
-                  ✓ 该告警类型下的所有策略条件类型已全部配置（每种条件类型仅可配置一次）。
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* 业务要素4：策略条件（气体/烟感/标签脱落/标签低电隐藏；人员禁入仅体现告警时段；人数超员仅保留持续时长；标签离线仅保留连接失联时长[小时]） */}
+          {!isPolicyConditionHidden && (
+            <div className="flex items-start">
+              <label className="w-28 text-right pr-4 pt-2 text-slate-700 shrink-0 font-bold flex items-center justify-end gap-1">
+                <ShieldAlert className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-red-500 mr-0.5">*</span>策略条件:
+              </label>
+              <div className="flex-1 space-y-2.5">
+                {currentConditionConfig.isTimeRangeOnly ? (
+                  /* 人员禁入专用：仅体现告警时段设置 */
+                  policyConditions.slice(0, 1).map((condItem, idx) => {
+                    const tStart = condItem.timeStart || '00:00';
+                    const tEnd = condItem.timeEnd || '23:59';
+                    const applyPreset = (s: string, e: string) => {
+                      const updated = [...policyConditions];
+                      updated[idx] = {
+                        ...updated[idx],
+                        type: '告警时段',
+                        operator: `${s} ~ ${e}`,
+                        timeStart: s,
+                        timeEnd: e
+                      };
+                      setPolicyConditions(updated);
+                    };
+                    return (
+                      <div key={condItem.id} className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg font-bold text-xs shrink-0">
+                            告警时段
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="time"
+                              value={tStart}
+                              onChange={(e) => applyPreset(e.target.value || '00:00', tEnd)}
+                              className="px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 font-mono font-bold text-[13px] focus:outline-none focus:border-blue-500"
+                            />
+                            <span className="text-slate-400 font-bold">至</span>
+                            <input
+                              type="time"
+                              value={tEnd}
+                              onChange={(e) => applyPreset(tStart, e.target.value || '23:59')}
+                              className="px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-800 font-mono font-bold text-[13px] focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            {[
+                              { label: '全天禁入', s: '00:00', e: '23:59' },
+                              { label: '夜间时段', s: '18:00', e: '08:00' },
+                              { label: '午休时段', s: '12:00', e: '13:30' }
+                            ].map(preset => {
+                              const isActive = tStart === preset.s && tEnd === preset.e;
+                              return (
+                                <button
+                                  key={preset.label}
+                                  type="button"
+                                  onClick={() => applyPreset(preset.s, preset.e)}
+                                  className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors cursor-pointer ${
+                                    isActive
+                                      ? 'bg-blue-600 text-white border-blue-600'
+                                      : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400 hover:text-blue-600'
+                                  }`}
+                                >
+                                  {preset.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          {currentConditionConfig.helpText}（当前生效时段：<strong className="font-mono text-blue-700">{tStart} ~ {tEnd}</strong>）
+                        </p>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <>
+                    {policyConditions.map((condItem, idx) => (
+                      <div key={condItem.id} className="p-2.5 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
+                        <div className="flex items-center gap-2.5">
+                          {/* 1. 条件类型 */}
+                          <select 
+                            value={condItem.type}
+                            onChange={(e) => {
+                              const newType = e.target.value;
+                              const updated = [...policyConditions];
+                              updated[idx] = {
+                                ...updated[idx],
+                                type: newType
+                              };
+                              setPolicyConditions(updated);
+                            }}
+                            className="flex-1 px-3 py-2 border-2 border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-bold cursor-pointer"
+                          >
+                            {currentConditionConfig.conditionTypes.map(cType => {
+                              const isUsed = policyConditions.some((c, i) => i !== idx && c.type === cType);
+                              return (
+                                <option key={cType} value={cType} disabled={isUsed}>
+                                  {cType} {isUsed ? '(已配置)' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+
+                          {/* 2. 判定规则算子 */}
+                          <select 
+                            value={condItem.operator}
+                            onChange={(e) => {
+                              const updated = [...policyConditions];
+                              updated[idx] = {
+                                ...updated[idx],
+                                operator: e.target.value
+                              };
+                              setPolicyConditions(updated);
+                            }}
+                            className="w-36 px-3 py-2 border-2 border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-bold cursor-pointer"
+                          >
+                            {currentConditionConfig.operators.map(op => (
+                              <option key={op} value={op}>{op}</option>
+                            ))}
+                          </select>
+
+                          {/* 3. 设置值步进器与单位 */}
+                          <div className="flex items-center border-2 border-slate-200 rounded-xl overflow-hidden shrink-0 bg-white shadow-2xs">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...policyConditions];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  value: Math.max(0, condItem.value - 1)
+                                };
+                                setPolicyConditions(updated);
+                              }}
+                              className="px-2.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border-r border-slate-200 transition-colors cursor-pointer"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <input 
+                              type="number" 
+                              value={condItem.value}
+                              onChange={(e) => {
+                                const updated = [...policyConditions];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  value: Number(e.target.value) || 0
+                                };
+                                setPolicyConditions(updated);
+                              }}
+                              className="w-16 py-1.5 text-center text-slate-800 text-[13px] font-mono font-bold focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...policyConditions];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  value: condItem.value + 1
+                                };
+                                setPolicyConditions(updated);
+                              }}
+                              className="px-2.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border-l border-slate-200 transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="px-2.5 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold border-l border-slate-200 select-none">
+                              {condItem.unit || currentConditionConfig.unit}
+                            </span>
+                          </div>
+
+                          {policyConditions.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePolicyCondition(condItem.id)}
+                              className="p-2 text-slate-400 hover:text-rose-500 rounded-xl hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+                              title="删除此策略条件"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* 添加（并且）策略条件按钮：仅当策略有多种条件且尚未配全时展示 */}
+                    {canAddPolicyCondition && (
+                      <button
+                        type="button"
+                        onClick={handleAddPolicyCondition}
+                        className="flex items-center gap-1 text-[#1677ff] bg-[#e6f4ff] hover:bg-[#bae0ff] border border-[#91caff] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors mt-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> 添加（并且）策略条件
+                      </button>
+                    )}
+
+                    {!canAddPolicyCondition && policyConditions.length > 0 && currentConditionConfig.conditionTypes.length > 1 && (
+                      <div className="text-[11px] text-slate-400 italic pt-0.5">
+                        ✓ 该告警类型下的所有策略条件类型已全部配置（每种条件类型仅可配置一次）。
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 通知人员多级升级配置表格 */}
           <div className="flex items-start">

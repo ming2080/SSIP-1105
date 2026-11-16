@@ -314,22 +314,32 @@ export function AlarmConfig({ initialTab }: AlarmConfigProps) {
                           
                           <td className="py-3 px-3 whitespace-nowrap">
                             <div className="flex flex-wrap items-center justify-center gap-1">
-                              {Array.from(new Set(rule.areaConditions?.map(c => c.type).filter(Boolean) || [])).map(aType => (
-                                <span 
-                                  key={aType} 
-                                  className={`px-1.5 py-0.5 rounded text-[11px] font-semibold border ${
-                                    aType === '有限空间' 
-                                      ? 'bg-purple-50 text-purple-700 border-purple-200' 
-                                      : aType === '机舱内'
-                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                      : aType === '电子围栏' 
-                                      ? 'bg-rose-50 text-rose-700 border-rose-200' 
-                                      : 'bg-sky-50 text-sky-700 border-sky-200'
-                                  }`}
-                                >
-                                  {aType}
+                              {(!rule.areaConditions || rule.areaConditions.length === 0) ? (
+                                <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                                  全域监测
                                 </span>
-                              ))}
+                              ) : (
+                                Array.from<string>(new Set(rule.areaConditions.map(c => c.type).filter(Boolean))).map(aType => (
+                                  <span 
+                                    key={aType} 
+                                    className={`px-1.5 py-0.5 rounded text-[11px] font-semibold border ${
+                                      aType === '有限空间' 
+                                        ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                        : aType === '机舱内'
+                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                        : aType === '电子围栏' 
+                                        ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                                        : aType === '主基站'
+                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                        : ['气体探测器', '烟雾报警器', '摄像头'].includes(aType)
+                                        ? 'bg-teal-50 text-teal-700 border-teal-200'
+                                        : 'bg-sky-50 text-sky-700 border-sky-200'
+                                    }`}
+                                  >
+                                    {aType}
+                                  </span>
+                                ))
+                              )}
                             </div>
                           </td>
                           

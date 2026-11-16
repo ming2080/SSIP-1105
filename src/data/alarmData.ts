@@ -26,6 +26,8 @@ export interface AlarmRuleVersion {
       operator: string;
       value: number;
       unit?: string;
+      timeStart?: string;
+      timeEnd?: string;
     }>;
     notifyTargets: {
       low: string;
@@ -71,6 +73,8 @@ export interface AlarmRuleItem {
     operator: string;
     value: number;
     unit?: string;
+    timeStart?: string;
+    timeEnd?: string;
   }>;
   notifyTargets: {
     low: string;
@@ -84,15 +88,14 @@ export interface AlarmRuleItem {
   effectivePeriod: '自定义' | '永久' | '联动【加班登记单】实际作业时段';
 }
 
-// 告警策略类型标准枚举选项（严格对齐《智慧船厂告警策略场景分析配置表_V1》）
+// 告警策略类型标准枚举选项（已移除人员进入类型）
 export const ALARM_POLICY_TYPES = [
-  '人员进入',
   '人员禁入',
   '人数超员',
   '安全员/监护人脱岗',
   '连续长时间工作/异常停留',
   '气体告警',
-  '烟雾告警',
+  '烟感告警',
   '标签脱落告警',
   '标签低电告警',
   '标签离线告警',
@@ -101,7 +104,7 @@ export const ALARM_POLICY_TYPES = [
   '厂区玩手机',
   '安全帽脱落', // 兼容历史数据别名
   '异常停留',   // 兼容历史数据别名
-  '烟感告警',   // 兼容历史数据别名
+  '烟雾告警',   // 兼容历史数据别名
   '安全员脱岗告警' // 兼容历史数据别名
 ] as const;
 
@@ -307,8 +310,8 @@ export const INITIAL_ALARM_RULES: AlarmRuleItem[] = [
   },
   {
     id: 3,
-    name: '2号码头重型龙门吊防侵入人员进入告警',
-    type: '人员进入',
+    name: '2号码头重型龙门吊防侵入人员禁入告警',
+    type: '人员禁入',
     level: '高',
     notify: '是',
     period: '永久',
@@ -318,14 +321,18 @@ export const INITIAL_ALARM_RULES: AlarmRuleItem[] = [
     createdAt: '2026-08-18 18:18:12',
     areaConditions: [
       { type: '电子围栏', relation: '是', target: '重件吊装坠落警戒围栏' },
-      { type: '作业面', relation: '是', target: '舾装码头高空作业面' }
+      { type: '作业面', relation: '是', target: '舾装码头2号码头起重吊装面' },
+      { type: '主基站', relation: '是', target: '1号码头主基站 (BS-01)' }
     ],
     personConditions: [
-      { scope: '指定人员', relation: '否', target: '起重工' }
+      { scope: '工种类别', relation: '不是', target: '起重挂钩工' }
     ],
-    conditionType: '无进出许可进入',
-    conditionOperator: '存在',
+    conditionType: '告警时段',
+    conditionOperator: '00:00 ~ 23:59',
     conditionValue: 1,
+    policyConditions: [
+      { type: '告警时段', operator: '00:00 ~ 23:59', value: 1, unit: '时段', timeStart: '00:00', timeEnd: '23:59' }
+    ],
     notifyTargets: {
       low: '现场施工班组长',
       lowCountdown: '1分钟',
@@ -343,20 +350,24 @@ export const INITIAL_ALARM_RULES: AlarmRuleItem[] = [
         dateStr: '20260827',
         createdAt: '2026-08-27 16:35:12',
         modifier: '安全总监-赵志刚',
-        changeNotes: '将起重指挥作业区电子围栏警戒精度提升至分米级，并接入高分贝声光警报',
+        changeNotes: '将起重指挥作业区电子围栏警戒精度提升至分米级，并接入主基站覆盖区全时段禁入控制',
         snapshot: {
-          name: '2号码头重型龙门吊立体防侵入警戒',
-          type: '人员进入',
+          name: '2号码头重型龙门吊立体防侵入禁入警戒',
+          type: '人员禁入',
           level: '高',
           areaConditions: [
-            { type: '电子围栏', relation: '是', target: '重件吊装坠落警戒围栏' }
+            { type: '电子围栏', relation: '是', target: '重件吊装坠落警戒围栏' },
+            { type: '主基站', relation: '是', target: '1号码头主基站 (BS-01)' }
           ],
           personConditions: [
-            { scope: '指定人员', relation: '否', target: '起重工' }
+            { scope: '工种类别', relation: '不是', target: '起重挂钩工' }
           ],
-          conditionType: '无进出许可进入',
-          conditionOperator: '存在',
+          conditionType: '告警时段',
+          conditionOperator: '00:00 ~ 23:59',
           conditionValue: 1,
+          policyConditions: [
+            { type: '告警时段', operator: '00:00 ~ 23:59', value: 1, unit: '时段', timeStart: '00:00', timeEnd: '23:59' }
+          ],
           notifyTargets: {
             low: '现场施工班组长',
             lowCountdown: '1分钟',
@@ -811,7 +822,7 @@ export const INITIAL_ALARM_RULES: AlarmRuleItem[] = [
     personConditions: [
       { scope: '指定人员', relation: '是', target: '现场当班专职安全员' }
     ],
-    conditionType: '脱离指定监护区域时长',
+    conditionType: '脱岗离岗时长',
     conditionOperator: '大于',
     conditionValue: 10,
     notifyTargets: {
@@ -843,7 +854,7 @@ export const INITIAL_ALARM_RULES: AlarmRuleItem[] = [
           personConditions: [
             { scope: '指定人员', relation: '是', target: '现场当班专职安全员' }
           ],
-          conditionType: '脱离指定监护区域时长',
+          conditionType: '脱岗离岗时长',
           conditionOperator: '大于',
           conditionValue: 10,
           notifyTargets: {

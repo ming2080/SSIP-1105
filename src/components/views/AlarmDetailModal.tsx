@@ -220,19 +220,40 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
               <span className="text-slate-400 text-xs block mb-1">策略判断阈值与规则</span>
-              {snapshot.policyConditions && snapshot.policyConditions.length > 0 ? (
-                <div className="space-y-1">
-                  {snapshot.policyConditions.map((pc, idx) => (
-                    <div key={idx} className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-2 py-1 rounded border border-slate-200/80">
-                      {pc.type} {pc.operator} {pc.value} {pc.unit || ''}
+              {(() => {
+                const isNoConditionType = ['气体告警', '烟感告警', '烟雾告警', '标签脱落告警', '标签低电告警'].includes(snapshot.type);
+                if (snapshot.conditionOperator === '自动监测' || ((!snapshot.policyConditions || snapshot.policyConditions.length === 0) && isNoConditionType)) {
+                  return (
+                    <div className="text-xs font-medium text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded border border-slate-200/80">
+                      由设备/传感器阈值自动触发（无需配置策略条件）
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-2 py-1.5 rounded border border-slate-200/80">
-                  {snapshot.conditionType} {snapshot.conditionOperator} {snapshot.conditionValue}
-                </div>
-              )}
+                  );
+                }
+                if (snapshot.policyConditions && snapshot.policyConditions.length > 0) {
+                  return (
+                    <div className="space-y-1">
+                      {snapshot.policyConditions.map((pc, idx) => {
+                        const isTimeRange = pc.type === '告警时段' || Boolean(pc.timeStart || pc.timeEnd) || pc.operator?.includes('~');
+                        return (
+                          <div key={idx} className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-2 py-1 rounded border border-slate-200/80">
+                            {isTimeRange
+                              ? `${pc.type}：${pc.timeStart && pc.timeEnd ? `${pc.timeStart} ~ ${pc.timeEnd}` : pc.operator}`
+                              : `${pc.type} ${pc.operator} ${pc.value} ${pc.unit || ''}`}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+                const isFallbackTimeRange = snapshot.conditionType === '告警时段' || snapshot.conditionOperator?.includes('~');
+                return (
+                  <div className="font-mono text-xs font-bold text-slate-800 bg-slate-50 px-2 py-1.5 rounded border border-slate-200/80">
+                    {isFallbackTimeRange
+                      ? `${snapshot.conditionType}：${snapshot.conditionOperator}`
+                      : `${snapshot.conditionType} ${snapshot.conditionOperator} ${snapshot.conditionValue}`}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -248,17 +269,21 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
                 {snapshot.areaConditions && snapshot.areaConditions.length > 0 ? (
                   snapshot.areaConditions.map((cond, idx) => (
                     <div key={idx} className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 text-xs">
-                      <span className={`font-semibold px-2 py-0.5 rounded border text-[11px] ${
+                      <span className={`font-semibold px-2 py-0.5 rounded border text-[11px] shrink-0 ${
                         cond.type === '有限空间'
                           ? 'bg-purple-50 text-purple-700 border-purple-200'
                           : cond.type === '电子围栏'
                           ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : cond.type === '主基站'
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          : ['气体探测器', '烟雾报警器', '摄像头'].includes(cond.type)
+                          ? 'bg-teal-50 text-teal-700 border-teal-200'
                           : 'bg-sky-50 text-sky-700 border-sky-200'
                       }`}>
                         {cond.type || '作业面'}
                       </span>
                       <span className="text-slate-400">·</span>
-                      <span className="font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]">
+                      <span className="font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px] shrink-0">
                         {(cond.relation === '否' || cond.relation === '不是') ? '排除(不是)' : '包含(是)'}
                       </span>
                       <span className="font-bold text-slate-800 truncate">{cond.target || '全部区域'}</span>
@@ -276,20 +301,26 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
             <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-2xs">
               <div className="flex items-center gap-2 font-bold text-slate-800 text-xs uppercase mb-3">
                 <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                人员范围限制条件
+                人员范围 / 关联限制条件
               </div>
               <div className="space-y-2">
                 {snapshot.personConditions && snapshot.personConditions.length > 0 ? (
                   snapshot.personConditions.map((cond, idx) => (
                     <div key={idx} className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 text-xs">
-                      <span className="text-slate-500 font-medium">{cond.scope || '全员'}</span>
+                      <span className="text-slate-500 font-medium shrink-0">{cond.scope || '全员'}</span>
                       <span className="text-slate-400">·</span>
-                      <span className="font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 text-[11px]">
-                        {cond.relation === '否' ? '排除(否)' : '包含(是)'}
+                      <span className="font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 text-[11px] shrink-0">
+                        {cond.scope === '作业票关联'
+                          ? '默认关联'
+                          : (cond.relation === '否' || cond.relation === '不是') ? '排除(不是)' : '包含(是)'}
                       </span>
-                      <span className="font-bold text-slate-800">{cond.target || '全体工人'}</span>
+                      <span className="font-bold text-slate-800 truncate">{cond.target || '全体工人'}</span>
                     </div>
                   ))
+                ) : ['气体告警', '烟感告警', '烟雾告警', '人数超员', '标签脱落告警', '标签低电告警', '标签离线告警'].includes(snapshot.type) ? (
+                  <div className="text-slate-500 text-xs italic bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    无需配置人员范围（策略按监测目标全域自动生效）
+                  </div>
                 ) : (
                   <div className="text-slate-400 text-xs italic">全厂所有作业工人</div>
                 )}
