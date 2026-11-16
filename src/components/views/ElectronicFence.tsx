@@ -25,9 +25,11 @@ import {
   Link,
   ShieldCheck,
   Boxes,
-  Anchor
+  Anchor,
+  Users
 } from 'lucide-react';
 import { CreateFenceModal, FenceData, FENCE_MODEL_LAYER_OPTIONS } from './CreateFenceModal';
+import { getStoredFences, saveStoredFences } from '@/src/data/fenceStorage';
 
 // 导入船模背景图
 import lngModelBg from '@/src/assets/images/lng_ship_model_1787972569670.jpg';
@@ -55,211 +57,6 @@ const PROJECTS_CONFIG: ProjectConfig[] = [
 ];
 
 const SHIP_PROJECTS = PROJECTS_CONFIG.filter(p => p.id !== 'yard');
-
-// 初始内置电子围栏数据池 (包含厂区公共和船舶项目关联)
-const INITIAL_FENCES: FenceData[] = [
-  // 1. 厂区公共围栏 (属于厂区设施，全厂通用)
-  {
-    id: 'FENCE-YARD-01',
-    code: 'EF-2026-001',
-    name: '龙门吊核心起重作业警戒区',
-    scopeType: 'yard',
-    yardArea: '龙门吊核心起重作业带',
-    projectId: 'yard',
-    projectName: '东南造船厂 (龙门吊作业带)',
-    type: '吊装警戒区',
-    color: '#d946ef',
-    shape: '多边形',
-    points: '24.3,22.6 41.9,15.6 50.2,25.4 54.6,36.6 48.5,37.7 28.2,36.6 25.4,25.6',
-    status: 'active',
-    dangerLevel: 'high',
-    deviceIds: ['DEV-BS-02', 'DEV-ALM-01'],
-    devices: [
-      { id: 'DEV-BS-02', name: '龙门吊G-01作业面基站', type: '定位基站', status: '在线' },
-      { id: 'DEV-ALM-01', name: '大件吊装防碰高分贝声光报警器', type: '声光报警器', status: '在线' }
-    ],
-    todayViolations: 2
-  },
-  {
-    id: 'FENCE-YARD-02',
-    code: 'EF-2026-002',
-    name: '钢材下料与分段预处理区',
-    scopeType: 'yard',
-    yardArea: '钢材下料与分段预处理车间',
-    projectId: 'yard',
-    projectName: '东南造船厂 (钢材下料车间)',
-    type: '作业区',
-    color: '#f59e0b',
-    shape: '多边形',
-    points: '26.9,56.9 49.4,57.7 54.4,69.0 61.0,79.7 27.4,82.8 25.8,69.6',
-    status: 'active',
-    dangerLevel: 'medium',
-    deviceIds: ['DEV-BS-01'],
-    devices: [
-      { id: 'DEV-BS-01', name: '1#船台高精度定位主基站', type: '定位基站', status: '在线' }
-    ],
-    todayViolations: 0
-  },
-  {
-    id: 'FENCE-YARD-03',
-    code: 'EF-2026-003',
-    name: '3号码头舾装泊位水域管制区',
-    scopeType: 'yard',
-    yardArea: '3号码头舾装泊位',
-    projectId: 'yard',
-    projectName: '东南造船厂 (3号码头)',
-    type: '禁入区',
-    color: '#06b6d4',
-    shape: '多边形',
-    points: '71.7,23.7 83.2,18.7 88.2,39.6 75.0,47.3 70.0,35.2',
-    status: 'active',
-    dangerLevel: 'high',
-    deviceIds: ['DEV-BS-03'],
-    devices: [
-      { id: 'DEV-BS-03', name: '舾装码头水域微基站', type: '定位基站', status: '在线' }
-    ],
-    todayViolations: 1
-  },
-  {
-    id: 'FENCE-YARD-04',
-    code: 'EF-2026-004',
-    name: '1#船台分段合拢滑道作业区',
-    scopeType: 'yard',
-    yardArea: '1#大型船台合拢滑道区',
-    projectId: 'yard',
-    projectName: '东南造船厂 (1#船台)',
-    type: '作业区',
-    color: '#10b981',
-    shape: '多边形',
-    points: '6.3,5.0 20.6,5.0 23.9,16.5 10.7,17.6 6.3,13.8',
-    status: 'active',
-    dangerLevel: 'low',
-    deviceIds: [],
-    devices: [],
-    todayViolations: 0
-  },
-
-  // 2. LNG船项目关联围栏 (弱关联特定造船工程项目)
-  {
-    id: 'FENCE-LNG-01',
-    code: 'EF-LNG-001',
-    name: '1#液货舱绝热合拢受限空间',
-    scopeType: 'project',
-    projectId: 'PRJ-2026-LNG01',
-    projectName: '17.4万m³ 薄膜型大型LNG船',
-    projectPhase: '密闭空间与绝热层铺设',
-    projectSection: '1#~4#液货舱 / 密闭舱室',
-    modelLevel: 'bottom',
-    modelLevelName: '底舱层 (双层底/压载密闭舱)',
-    type: '受限空间',
-    color: '#06b6d4',
-    shape: '多边形',
-    points: '16,28 34,28 38,54 14,54',
-    status: 'active',
-    dangerLevel: 'high',
-    deviceIds: ['DEV-GAS-01'],
-    devices: [
-      { id: 'DEV-GAS-01', name: '2#密闭货舱四合一气体检测仪', type: '气体检测仪', status: '在线' }
-    ],
-    todayViolations: 3
-  },
-  {
-    id: 'FENCE-LNG-02',
-    code: 'EF-LNG-002',
-    name: '主甲板高压管路动火作业区',
-    scopeType: 'project',
-    projectId: 'PRJ-2026-LNG01',
-    projectName: '17.4万m³ 薄膜型大型LNG船',
-    projectPhase: '主甲板管系与电气舾装',
-    projectSection: '主甲板及管架区域',
-    modelLevel: 'deck',
-    modelLevelName: '甲板层 (主甲板/露天作业区)',
-    type: '危险区',
-    color: '#ef4444',
-    shape: '多边形',
-    points: '40,24 64,24 68,52 36,52',
-    status: 'active',
-    dangerLevel: 'high',
-    deviceIds: ['DEV-ALM-01'],
-    devices: [
-      { id: 'DEV-ALM-01', name: '大件吊装防碰高分贝声光报警器', type: '声光报警器', status: '在线' }
-    ],
-    todayViolations: 1
-  },
-
-  // 3. 集装箱船项目关联围栏
-  {
-    id: 'FENCE-CTN-01',
-    code: 'EF-CTN-001',
-    name: '艏楼导轨架安装禁区',
-    scopeType: 'project',
-    projectId: 'PRJ-2026-CTN02',
-    projectName: '24000TEU 超大型集装箱船',
-    projectPhase: '船体合拢与主结构搭载',
-    projectSection: '艏楼与导轨架安装区',
-    modelLevel: 'deck',
-    modelLevelName: '甲板层 (主甲板/露天作业区)',
-    type: '禁入区',
-    color: '#f59e0b',
-    shape: '多边形',
-    points: '18,30 38,30 42,58 15,58',
-    status: 'active',
-    dangerLevel: 'medium',
-    deviceIds: [],
-    devices: [],
-    todayViolations: 0
-  },
-
-  // 4. VLCC原油船项目关联围栏
-  {
-    id: 'FENCE-VLCC-01',
-    code: 'EF-VLCC-001',
-    name: '泵舱与货油舱受限空间',
-    scopeType: 'project',
-    projectId: 'PRJ-2026-VLCC03',
-    projectName: '30万吨级 超大型原油船(VLCC)',
-    projectPhase: '密闭舱室涂装与动火作业',
-    projectSection: '机舱双层底及泵舱区',
-    modelLevel: 'engine',
-    modelLevelName: '机舱动力区 (主机/辅机与管系舱)',
-    type: '受限空间',
-    color: '#ef4444',
-    shape: '多边形',
-    points: '32,26 62,26 65,56 30,56',
-    status: 'active',
-    dangerLevel: 'high',
-    deviceIds: ['DEV-GAS-02'],
-    devices: [
-      { id: 'DEV-GAS-02', name: '涂装车间VOC气体分析仪', type: '气体检测仪', status: '在线' }
-    ],
-    todayViolations: 2
-  },
-
-  // 5. 散货船项目关联围栏
-  {
-    id: 'FENCE-BULK-01',
-    code: 'EF-BULK-001',
-    name: '船台大件总组吊装警戒',
-    scopeType: 'project',
-    projectId: 'PRJ-2026-BULK04',
-    projectName: '8.2万吨 卡姆萨尔型散货船',
-    projectPhase: '分段制作与预装配',
-    projectSection: '全船通用作业面',
-    modelLevel: 'middle',
-    modelLevelName: '中舱层 (货舱上部/中层平台)',
-    type: '吊装警戒区',
-    color: '#d946ef',
-    shape: '多边形',
-    points: '22,25 58,25 62,55 20,55',
-    status: 'active',
-    dangerLevel: 'high',
-    deviceIds: ['DEV-ALM-01'],
-    devices: [
-      { id: 'DEV-ALM-01', name: '大件吊装防碰高分贝声光报警器', type: '声光报警器', status: '在线' }
-    ],
-    todayViolations: 0
-  }
-];
 
 // 实时越界告警流水模拟数据
 interface ViolationAlert {
@@ -317,7 +114,7 @@ export function ElectronicFence() {
   const [selectedModelLevel, setSelectedModelLevel] = useState<string>('all');
   const [isLayerDropdownOpen, setIsLayerDropdownOpen] = useState(false);
 
-  const [fences, setFences] = useState<FenceData[]>(INITIAL_FENCES);
+  const [fences, setFences] = useState<FenceData[]>(() => getStoredFences());
   const [selectedFenceId, setSelectedFenceId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -364,7 +161,11 @@ export function ElectronicFence() {
 
   // 新增围栏确认回调
   const handleCreateConfirm = (newFence: FenceData) => {
-    setFences(prev => [newFence, ...prev]);
+    setFences(prev => {
+      const next = [newFence, ...prev];
+      saveStoredFences(next);
+      return next;
+    });
     setSelectedFenceId(newFence.id);
     if (newFence.scopeType === 'project' && newFence.projectId && newFence.projectId !== 'yard') {
       setMapViewMode('project');
@@ -431,7 +232,11 @@ export function ElectronicFence() {
   const handleDeleteFence = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (window.confirm('确定要删除该电子围栏策略吗？')) {
-      setFences(prev => prev.filter(f => f.id !== id));
+      setFences(prev => {
+        const next = prev.filter(f => f.id !== id);
+        saveStoredFences(next);
+        return next;
+      });
       if (selectedFenceId === id) {
         setSelectedFenceId(null);
       }
@@ -441,15 +246,19 @@ export function ElectronicFence() {
   // 切换围栏生效状态
   const handleToggleFenceStatus = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setFences(prev => prev.map(f => {
-      if (f.id === id) {
-        return {
-          ...f,
-          status: f.status === 'active' ? 'inactive' : 'active'
-        };
-      }
-      return f;
-    }));
+    setFences(prev => {
+      const next = prev.map(f => {
+        if (f.id === id) {
+          return {
+            ...f,
+            status: f.status === 'active' ? ('inactive' as const) : ('active' as const)
+          };
+        }
+        return f;
+      });
+      saveStoredFences(next);
+      return next;
+    });
   };
 
   return (
@@ -668,6 +477,10 @@ export function ElectronicFence() {
                       </button>
                       <span className="text-slate-400 text-[10px]">
                         设备: <strong className="text-slate-700">{fence.devices.length}</strong>
+                      </span>
+                      <span className="text-slate-400 text-[10px] inline-flex items-center gap-0.5">
+                        <Users className="w-2.5 h-2.5 text-blue-500" />
+                        上限: <strong className="text-blue-700 font-mono">{fence.maxCapacity ?? 20}人</strong>
                       </span>
                     </div>
 
@@ -1132,6 +945,13 @@ export function ElectronicFence() {
                   <div>
                     <span className="text-slate-500 block">今日越界</span>
                     <span className="font-mono font-bold text-rose-400">{activeFence.todayViolations} 次</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">区域上限人数</span>
+                    <span className="font-mono font-bold text-emerald-400 flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      {activeFence.maxCapacity ?? 20} 人
+                    </span>
                   </div>
                 </div>
 

@@ -254,8 +254,22 @@ export interface CameraDevice {
   electricFence?: string;
 }
 
-// 激励器设备类型 (与主基站业务要素完全一致)
-export interface ExciterDevice extends BaseStationDevice {}
+export type ExciterPurpose = '上下船识别' | '有限空间进出识别' | '机舱区域定位' | '重点区域越界感知' | '其他用途';
+export type ExciterBoardingDirection = 'board' | 'disembark';
+
+export const EXCITER_PURPOSE_OPTIONS: { value: ExciterPurpose; label: string; desc: string }[] = [
+  { value: '上下船识别', label: '上下船识别', desc: '用于舷梯/登船闸口，判定人员上船或下船动作' },
+  { value: '有限空间进出识别', label: '有限空间进出识别', desc: '用于受限舱室/人孔门通道，精准识别人员进出舱室' },
+  { value: '机舱区域定位', label: '机舱区域定位', desc: '用于多层机舱及动力舱室辅助精准定位' },
+  { value: '重点区域越界感知', label: '重点区域越界感知', desc: '用于高风险作业面/禁入区近场触发告警' },
+  { value: '其他用途', label: '其他用途', desc: '通用区域信号激励与辅助定位' }
+];
+
+// 激励器设备类型 (与主基站业务要素一致，扩展设备用途与上下船识别配置)
+export interface ExciterDevice extends BaseStationDevice {
+  devicePurpose?: ExciterPurpose;
+  boardingDirection?: ExciterBoardingDirection; // 上下船识别方向：board(上船感应设备) | disembark(下船感应设备)
+}
 
 // 初始数据：激励器
 const initialExciters: ExciterDevice[] = [
@@ -264,6 +278,7 @@ const initialExciters: ExciterDevice[] = [
     seq: 1,
     code: 'EX-CODE-01',
     name: '1#液货舱激励器',
+    devicePurpose: '有限空间进出识别',
     associationType: 'project',
     projectId: 'PRJ-2026-LNG01',
     project: '17.4万m³ 薄膜型大型LNG船 1号舰',
@@ -292,6 +307,7 @@ const initialExciters: ExciterDevice[] = [
     seq: 2,
     code: 'EX-CODE-02',
     name: '机舱动力区激励器',
+    devicePurpose: '机舱区域定位',
     associationType: 'global',
     projectId: '',
     project: '全厂通用设备',
@@ -316,6 +332,66 @@ const initialExciters: ExciterDevice[] = [
     ipAddress: '192.168.10.152',
     macAddress: '22:6D:7E:CD:5B:E2',
     firmwareVersion: 'v1.2.0'
+  },
+  {
+    id: 'EX-03',
+    seq: 3,
+    code: 'EX-BOARD-01',
+    name: 'LNG船左舷梯口上船感应激励器',
+    devicePurpose: '上下船识别',
+    boardingDirection: 'board',
+    associationType: 'project',
+    projectId: 'PRJ-2026-LNG01',
+    project: '17.4万m³ 薄膜型大型LNG船 1号舰',
+    modelLevel: 'deck',
+    modelLevelName: '甲板层 (主甲板/露天作业区)',
+    status: '在线',
+    recycleStatus: '设备安装',
+    location: '左舷登船舷梯上口',
+    floor: '1',
+    signalLossTime: 3,
+    attenuationCoeff: '16',
+    coverageRange: '25',
+    positionX: 318.40,
+    positionY: 19.20,
+    positionZ: -118.60,
+    installationSite: '码头',
+    auxPositioning: '是',
+    electricFence: 'EF-LNG-DECK01',
+    lastUpdated: '2026-09-02 08:30:00',
+    ipAddress: '192.168.10.153',
+    macAddress: '22:6D:7E:CD:5B:E3',
+    firmwareVersion: 'v1.2.1'
+  },
+  {
+    id: 'EX-04',
+    seq: 4,
+    code: 'EX-BOARD-02',
+    name: 'LNG船左舷梯口下船感应激励器',
+    devicePurpose: '上下船识别',
+    boardingDirection: 'disembark',
+    associationType: 'project',
+    projectId: 'PRJ-2026-LNG01',
+    project: '17.4万m³ 薄膜型大型LNG船 1号舰',
+    modelLevel: 'deck',
+    modelLevelName: '甲板层 (主甲板/露天作业区)',
+    status: '在线',
+    recycleStatus: '设备安装',
+    location: '左舷登船舷梯下口（码头侧）',
+    floor: '1',
+    signalLossTime: 3,
+    attenuationCoeff: '16',
+    coverageRange: '25',
+    positionX: 306.80,
+    positionY: 18.80,
+    positionZ: -112.40,
+    installationSite: '码头',
+    auxPositioning: '是',
+    electricFence: 'EF-LNG-DECK01',
+    lastUpdated: '2026-09-02 08:32:00',
+    ipAddress: '192.168.10.154',
+    macAddress: '22:6D:7E:CD:5B:E4',
+    firmwareVersion: 'v1.2.1'
   }
 ];
 
@@ -599,6 +675,7 @@ export function DeviceManagement() {
   const [selectedModelLevel, setSelectedModelLevel] = useState<string>(''); // 模型分层
   const [startDate, setStartDate] = useState<string>('');          // 开始日期（摄像头专用）
   const [endDate, setEndDate] = useState<string>('');            // 结束日期（摄像头专用）
+  const [selectedPurpose, setSelectedPurpose] = useState<string>(''); // 激励器设备用途筛选
 
   // 生效的查询条件
   const [activeQuery, setActiveQuery] = useState({
@@ -606,7 +683,8 @@ export function DeviceManagement() {
     project: '',
     modelLevel: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    purpose: ''
   });
 
   // 模态框与选中的设备
@@ -805,7 +883,8 @@ export function DeviceManagement() {
       project: selectedProject,
       modelLevel: selectedModelLevel,
       startDate,
-      endDate
+      endDate,
+      purpose: selectedPurpose
     });
   };
 
@@ -816,12 +895,14 @@ export function DeviceManagement() {
     setSelectedModelLevel('');
     setStartDate('');
     setEndDate('');
+    setSelectedPurpose('');
     setActiveQuery({
       code: '',
       project: '',
       modelLevel: '',
       startDate: '',
-      endDate: ''
+      endDate: '',
+      purpose: ''
     });
   };
 
@@ -855,7 +936,17 @@ export function DeviceManagement() {
       const matchModelLevel = !activeQuery.modelLevel || 
         d.modelLevel === activeQuery.modelLevel ||
         d.associatedWorkfaces?.some(a => a.modelLevel === activeQuery.modelLevel);
-      return matchCode && matchProject && matchModelLevel;
+      let matchPurpose = true;
+      if (activeQuery.purpose) {
+        if (activeQuery.purpose === 'boarding_board') {
+          matchPurpose = d.devicePurpose === '上下船识别' && d.boardingDirection === 'board';
+        } else if (activeQuery.purpose === 'boarding_disembark') {
+          matchPurpose = d.devicePurpose === '上下船识别' && d.boardingDirection === 'disembark';
+        } else {
+          matchPurpose = d.devicePurpose === activeQuery.purpose;
+        }
+      }
+      return matchCode && matchProject && matchModelLevel && matchPurpose;
     });
   }, [exciters, activeQuery]);
 
@@ -977,7 +1068,11 @@ export function DeviceManagement() {
         signalLossTime: 5,
         attenuationCoeff: '0',
         coverageRange: '50',
-        auxPositioning: '是'
+        auxPositioning: '是',
+        ...(activeTab === 'exciter' ? {
+          devicePurpose: '上下船识别' as ExciterPurpose,
+          boardingDirection: 'board' as ExciterBoardingDirection
+        } : {})
       });
     } else if (activeTab === 'gas_detector') {
       const randomSn = '866833080' + Math.floor(100050 + Math.random() * 899900);
@@ -1087,7 +1182,11 @@ export function DeviceManagement() {
       sn: item.sn ?? '',
       modelCategory: item.modelCategory ?? '--',
       apiUrl: item.apiUrl ?? '',
-      rtspUrl: item.rtspUrl ?? ''
+      rtspUrl: item.rtspUrl ?? '',
+      ...(activeTab === 'exciter' ? {
+        devicePurpose: item.devicePurpose || '有限空间进出识别',
+        boardingDirection: item.boardingDirection || 'board'
+      } : {})
     });
     setModalMode('edit');
   };
@@ -1175,8 +1274,15 @@ export function DeviceManagement() {
       const setList = activeTab === 'main_station' ? setBaseStations : setExciters;
       const listData = activeTab === 'main_station' ? baseStations : exciters;
       const prefix = activeTab === 'main_station' ? 'BS' : 'EX';
+      const exciterPurposeFields = activeTab === 'exciter' ? {
+        devicePurpose: (formFields.devicePurpose || '其他用途') as ExciterPurpose,
+        boardingDirection: formFields.devicePurpose === '上下船识别'
+          ? ((formFields.boardingDirection || 'board') as ExciterBoardingDirection)
+          : undefined
+      } : {};
+
       if (modalMode === 'create') {
-        const newItem: BaseStationDevice = {
+        const newItem: ExciterDevice = {
           id: `${prefix}-${Date.now().toString().slice(-4)}`,
           seq: listData.length + 1,
           code: formFields.code || '',
@@ -1206,7 +1312,8 @@ export function DeviceManagement() {
           lastUpdated: new Date().toISOString().replace('T', ' ').substring(0, 19),
           ipAddress: `192.168.10.${100 + listData.length}`,
           macAddress: `11:5D:6D:BC:${Math.floor(10+Math.random()*89)}:${Math.floor(10+Math.random()*89)}`,
-          firmwareVersion: 'v2.4.12'
+          firmwareVersion: 'v2.4.12',
+          ...exciterPurposeFields
         };
         setList([newItem, ...listData]);
       } else if (modalMode === 'edit' && selectedDevice) {
@@ -1226,7 +1333,9 @@ export function DeviceManagement() {
           positionY: Number(formFields.positionY ?? 10.10),
           positionZ: Number(formFields.positionZ ?? -150.40),
           installationSite: formFields.installationSite || '舱内',
-          electricFence: finalElectricFence
+          electricFence: finalElectricFence,
+          lastUpdated: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          ...exciterPurposeFields
         } : d));
       }
     } else if (activeTab === 'gas_detector') {
@@ -1590,6 +1699,27 @@ export function DeviceManagement() {
             </select>
           </div>
 
+          {/* 条件 4：设备用途（激励器Tab专属） */}
+          {activeTab === 'exciter' && (
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 font-medium whitespace-nowrap">设备用途</span>
+              <select
+                value={selectedPurpose}
+                onChange={(e) => setSelectedPurpose(e.target.value)}
+                className="w-48 px-3 py-1.5 border border-slate-300 rounded text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition-all cursor-pointer"
+              >
+                <option value="">全部用途</option>
+                <option value="上下船识别">上下船识别（全部）</option>
+                <option value="boarding_board">↳ 上船感应设备</option>
+                <option value="boarding_disembark">↳ 下船感应设备</option>
+                <option value="有限空间进出识别">有限空间进出识别</option>
+                <option value="机舱区域定位">机舱区域定位</option>
+                <option value="重点区域越界感知">重点区域越界感知</option>
+                <option value="其他用途">其他用途</option>
+              </select>
+            </div>
+          )}
+
           {/* 条件 4：创建时间（摄像头Tab专属） */}
           {activeTab === 'camera' && (
             <div className="flex items-center gap-2">
@@ -1760,6 +1890,7 @@ export function DeviceManagement() {
                   <th className="py-2.5 px-2 text-center whitespace-nowrap w-12 border-r border-slate-100">序号</th>
                   <th className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100">激励器编码</th>
                   <th className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100">激励器名称</th>
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100 min-w-[140px]">设备用途</th>
                   <th className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100 min-w-[160px]">厂区通用/关联项目</th>
                   <th className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100 min-w-[100px]">船型分层</th>
                   <th className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-100">激励器状态</th>
@@ -1774,7 +1905,7 @@ export function DeviceManagement() {
               <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
                 {filteredExciters.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-slate-400">
+                    <td colSpan={13} className="py-12 text-center text-slate-400">
                       暂无符合条件的激励器设备记录
                     </td>
                   </tr>
@@ -1784,6 +1915,28 @@ export function DeviceManagement() {
                       <td className="py-2.5 px-2 text-center text-slate-500 font-mono text-[11px] border-r border-slate-50">{idx + 1}</td>
                       <td className="py-2.5 px-3 text-center font-mono text-slate-800 text-[11px] whitespace-nowrap border-r border-slate-50">{device.code}</td>
                       <td className="py-2.5 px-3 text-center text-slate-800 font-medium whitespace-nowrap border-r border-slate-50">{device.name}</td>
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-50">
+                        {device.devicePurpose === '上下船识别' ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium text-[11px]">
+                              上下船识别
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded font-bold text-[11px] border ${
+                                device.boardingDirection === 'disembark'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}
+                            >
+                              {device.boardingDirection === 'disembark' ? '下船感应' : '上船感应'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-medium text-[11px]">
+                            {device.devicePurpose || '未配置'}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2.5 px-3 text-center border-r border-slate-50">
                         {renderProjectCell(device)}
                       </td>
@@ -2301,40 +2454,40 @@ export function DeviceManagement() {
               {(activeTab === 'main_station' || activeTab === 'exciter') && (
                 <div className="space-y-3.5">
                   <div className="grid grid-cols-2 gap-3.5">
-                    {/* 1. 基站编码 */}
+                    {/* 1. 编码 */}
                     <div>
                       <label className="block text-slate-700 font-semibold mb-1">
-                        基站编码 <span className="text-rose-500">*</span>
+                        {activeTab === 'exciter' ? '激励器编码' : '基站编码'} <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
                         required
                         value={formFields.code || ''}
                         onChange={(e) => setFormFields({ ...formFields, code: e.target.value })}
-                        placeholder="请输入基站编码，如: 测试"
+                        placeholder={activeTab === 'exciter' ? '请输入激励器编码，如: EX-BOARD-01' : '请输入基站编码，如: BS-SEC-01'}
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs focus:outline-none focus:border-blue-500 font-mono"
                       />
                     </div>
 
-                    {/* 2. 基站名称 */}
+                    {/* 2. 名称 */}
                     <div>
                       <label className="block text-slate-700 font-semibold mb-1">
-                        基站名称 <span className="text-rose-500">*</span>
+                        {activeTab === 'exciter' ? '激励器名称' : '基站名称'} <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
                         required
                         value={formFields.name || ''}
                         onChange={(e) => setFormFields({ ...formFields, name: e.target.value })}
-                        placeholder="请输入基站名称，如: 123"
+                        placeholder={activeTab === 'exciter' ? '请输入激励器名称，如: 左舷梯口上船感应激励器' : '请输入基站名称'}
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs focus:outline-none focus:border-blue-500"
                       />
                     </div>
 
-                    {/* 3. 基站安装位置 */}
+                    {/* 3. 安装位置 */}
                     <div>
                       <label className="block text-slate-700 font-semibold mb-1">
-                        基站安装位置 <span className="text-rose-500">*</span>
+                        {activeTab === 'exciter' ? '激励器安装位置' : '基站安装位置'} <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -2348,7 +2501,7 @@ export function DeviceManagement() {
                             electricFence: formFields.electricFence || (newLoc ? `${newLoc}-围栏` : '517-9')
                           });
                         }}
-                        placeholder="请输入安装具体位置，如: 测试"
+                        placeholder="请输入安装具体位置，如: 左舷登船舷梯上口"
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-xs focus:outline-none focus:border-blue-500"
                       />
                     </div>
@@ -2451,9 +2604,124 @@ export function DeviceManagement() {
                         <span className="absolute right-2.5 text-slate-400 text-xs font-bold pointer-events-none">m</span>
                       </div>
                     </div>
-
-
                   </div>
+
+                  {/* 激励器专属：设备用途与上下船识别设置 */}
+                  {activeTab === 'exciter' && (
+                    <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/90 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="p-1 rounded-md bg-indigo-100 text-indigo-700">
+                            <Ship className="w-4 h-4" />
+                          </span>
+                          <div>
+                            <div className="text-slate-800 font-bold text-xs">
+                              设备用途设置 <span className="text-rose-500">*</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500">
+                              定义该激励器在作业现场的感应识别业务场景，用于作业看板上下船及进出舱室统计
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        <div>
+                          <label className="block text-slate-700 font-semibold mb-1">
+                            设备用途 <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            required
+                            value={formFields.devicePurpose || '上下船识别'}
+                            onChange={(e) => {
+                              const nextPurpose = e.target.value as ExciterPurpose;
+                              setFormFields({
+                                ...formFields,
+                                devicePurpose: nextPurpose,
+                                boardingDirection: nextPurpose === '上下船识别'
+                                  ? (formFields.boardingDirection || 'board')
+                                  : undefined
+                              });
+                            }}
+                            className="w-full px-2.5 py-1.5 border border-indigo-300 rounded text-xs focus:outline-none focus:border-indigo-500 bg-white cursor-pointer font-medium text-slate-800"
+                          >
+                            {EXCITER_PURPOSE_OPTIONS.map(opt => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label} — {opt.desc}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 当用途选择“上下船识别”时，明确设定上船感应或下船感应 */}
+                        {(formFields.devicePurpose || '上下船识别') === '上下船识别' && (
+                          <div className="bg-white rounded-lg border border-indigo-200 p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-800 font-bold text-xs">
+                                上下船识别设置（感应方向） <span className="text-rose-500">*</span>
+                              </span>
+                              <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded font-medium">
+                                梯口/登船闸口建议成对部署
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2.5">
+                              <label
+                                className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                                  (formFields.boardingDirection || 'board') === 'board'
+                                    ? 'bg-emerald-50/90 border-emerald-400 ring-1 ring-emerald-300'
+                                    : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="boardingDirection"
+                                  value="board"
+                                  checked={(formFields.boardingDirection || 'board') === 'board'}
+                                  onChange={() => setFormFields({ ...formFields, boardingDirection: 'board' })}
+                                  className="mt-0.5 accent-emerald-600 cursor-pointer"
+                                />
+                                <div>
+                                  <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                                    <span>上船感应设备</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-700 font-semibold">识别上船</span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 mt-0.5">
+                                    人员通过该激励器区域时，自动判定并记录为登船/上船状态
+                                  </p>
+                                </div>
+                              </label>
+
+                              <label
+                                className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                                  formFields.boardingDirection === 'disembark'
+                                    ? 'bg-amber-50/90 border-amber-400 ring-1 ring-amber-300'
+                                    : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="boardingDirection"
+                                  value="disembark"
+                                  checked={formFields.boardingDirection === 'disembark'}
+                                  onChange={() => setFormFields({ ...formFields, boardingDirection: 'disembark' })}
+                                  className="mt-0.5 accent-amber-600 cursor-pointer"
+                                />
+                                <div>
+                                  <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                                    <span>下船感应设备</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-700 font-semibold">识别下船</span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 mt-0.5">
+                                    人员通过该激励器区域时，自动判定并记录为离船/下船状态
+                                  </p>
+                                </div>
+                              </label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2944,6 +3212,22 @@ export function DeviceManagement() {
               <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
                 {(activeTab === 'main_station' || activeTab === 'exciter') && (
                   <>
+                    {activeTab === 'exciter' && (
+                      <>
+                        <div className="flex justify-between border-b border-slate-100 pb-1.5">
+                          <span className="text-slate-500">设备用途：</span>
+                          <span className="font-bold text-indigo-700">{selectedDevice.devicePurpose || '未配置'}</span>
+                        </div>
+                        {selectedDevice.devicePurpose === '上下船识别' && (
+                          <div className="flex justify-between border-b border-slate-100 pb-1.5">
+                            <span className="text-slate-500">上下船识别：</span>
+                            <span className={`font-bold ${selectedDevice.boardingDirection === 'disembark' ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {selectedDevice.boardingDirection === 'disembark' ? '下船感应设备' : '上船感应设备'}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
                     <div className="flex justify-between border-b border-slate-100 pb-1.5"><span className="text-slate-500">回收状态：</span><span className="font-medium text-slate-800">{selectedDevice.recycleStatus}</span></div>
                     <div className="flex justify-between border-b border-slate-100 pb-1.5"><span className="text-slate-500">安装位置：</span><span className="font-medium text-slate-800">{selectedDevice.location}</span></div>
                     <div className="flex justify-between border-b border-slate-100 pb-1.5"><span className="text-slate-500">覆盖范围：</span><span className="font-mono text-blue-600 font-bold">{selectedDevice.coverageRange || '23m'}</span></div>
@@ -3660,6 +3944,19 @@ export function DeviceManagement() {
 
                   <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5">
                     <span className="text-slate-500 text-[10px] block">设备属性要素明细</span>
+                    {mapViewDevice.devicePurpose && (
+                      <div className="flex justify-between text-slate-400">
+                        <span>设备用途:</span>
+                        <strong className="text-indigo-300">
+                          {mapViewDevice.devicePurpose}
+                          {mapViewDevice.devicePurpose === '上下船识别' && (
+                            <span className={mapViewDevice.boardingDirection === 'disembark' ? 'text-amber-300 ml-1' : 'text-emerald-300 ml-1'}>
+                              ({mapViewDevice.boardingDirection === 'disembark' ? '下船感应设备' : '上船感应设备'})
+                            </span>
+                          )}
+                        </strong>
+                      </div>
+                    )}
                     <div className="flex justify-between text-slate-400">
                       <span>安装场所:</span>
                       <strong className="text-white">{mapViewDevice.installationSite || '室外'}</strong>

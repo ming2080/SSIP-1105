@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   Plus, 
@@ -19,6 +19,11 @@ import {
 } from 'lucide-react';
 import { AlarmRuleItem, AlarmRuleVersion, generateVersionId, formatDateTime, ALARM_POLICY_TYPES } from '@/src/data/alarmData';
 import { MOCK_PROJECTS } from '@/src/data/mockProjects';
+import { getStoredFences, FenceData } from '@/src/data/fenceStorage';
+import { INITIAL_SYSTEM_USERS } from '@/src/data/userManagementData';
+import { SHIPYARD_SAFETY_OFFICERS } from '@/src/data/workfaceData';
+import { MOCK_PERSONNEL_LIST } from '@/src/data/mockPersonnel';
+import { PersonnelMultiSelect, NotificationPersonOption } from './alarm/PersonnelMultiSelect';
 
 // 厂区作业面基础列表（支持多选与批量配置）
 export const YARD_WORKFACES = [
@@ -348,6 +353,70 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
   const [name, setName] = useState('');
   const [type, setType] = useState('人员禁入');
   
+  // 动态电子围栏数据源（与电子围栏管理模块联动，含区域上限人数）
+  const [fences, setFences] = useState<FenceData[]>(() => getStoredFences());
+  const [openNotifyDropdown, setOpenNotifyDropdown] = useState<'low' | 'mid' | 'high' | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFences(getStoredFences());
+      setOpenNotifyDropdown(null);
+    }
+    const handleFencesUpdated = () => {
+      setFences(getStoredFences());
+    };
+    window.addEventListener('shipyard_fences_updated', handleFencesUpdated);
+    return () => window.removeEventListener('shipyard_fences_updated', handleFencesUpdated);
+  }, [isOpen]);
+
+  // 合并系统用户、专职安全员与作业人员构建通知人员模糊查询候选池
+  const notificationPersonnelOptions = useMemo<NotificationPersonOption[]>(() => {
+    const map = new Map<string, NotificationPersonOption>();
+
+    SHIPYARD_SAFETY_OFFICERS.forEach(o => {
+      if (!map.has(o.name)) {
+        map.set(o.name, {
+          id: `so-${o.id}`,
+          name: o.name,
+          role: o.role,
+          department: o.department,
+          phone: o.phone,
+          empId: o.id
+        });
+      }
+    });
+
+    INITIAL_SYSTEM_USERS.forEach(u => {
+      if (u.status === '1' || u.status === 'disabled') return;
+      const displayName = u.nickName || u.name || u.userName;
+      if (displayName && !map.has(displayName)) {
+        map.set(displayName, {
+          id: `usr-${u.userId}`,
+          name: displayName,
+          role: u.role || '系统用户',
+          department: u.deptName || '东南船厂',
+          phone: u.phonenumber || u.phone,
+          empId: u.empId
+        });
+      }
+    });
+
+    MOCK_PERSONNEL_LIST.forEach(p => {
+      if (p.name && !map.has(p.name)) {
+        map.set(p.name, {
+          id: `emp-${p.id}`,
+          name: p.name,
+          role: p.role,
+          department: p.department,
+          phone: p.phone,
+          empId: p.id
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, []);
+
   // 区域范围条件列表 (支持多条件组合，作业面多选、船舶建造项目多选)
   const [areaConditions, setAreaConditions] = useState<Array<{
     type: string;
@@ -357,19 +426,19 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
     selectedTargets?: string[];
     selectedProjectIds?: string[]; // 有限空间时多选的船舶项目ID列表
   }>>([
-    { type: '电子围栏', relation: '是', target: YARD_ELECTRONIC_FENCES[0] }
+    { type: '电子围栏', relation: '是', target: fences[0]?.name || YARD_ELECTRONIC_FENCES[0] }
   ]);
 
-  // 人员范围条件列表 (严格限定：只对应工种或班组，选择是或不是两种范围，每种类型只能添加一次)
+  // 人员范围条件列表 (严格限定：只对应工种或班组，逻辑关系仅支持包含，每种类型只能添加一次)
   const [personConditions, setPersonConditions] = useState<Array<{
     scope: '工种类别' | '作业班组';
-    relation: '是' | '不是';
+    relation: '包含';
     target: string;
   }>>([
-    { scope: '工种类别', relation: '是', target: SHIPYARD_WORK_TYPES[0] }
+    { scope: '工种类别', relation: '包含', target: SHIPYARD_WORK_TYPES[0] }
   ]);
 
-  // 策略条件列表 (支持多条件组合，每种条件类型只能被添加一次)
+  // 策略条件列表 (支持多条件组合，每种条件类型只能被添加设置一次)
   const [policyConditions, setPolicyConditions] = useState<PolicyConditionItem[]>([
     {
       id: 'cond-1',
@@ -427,8 +496,20 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
     };
   };
 
-  // 当前策略类型支持的可用区域类型配置
-  const availableAreaConfigs = POLICY_TYPE_AREA_MAP[type] || [];
+  // 当前策略类型支持的可用区域类型配置（电子围栏动态读取围栏管理列表并附带兼容名称）
+  const allFenceTargets = useMemo(() => {
+    return Array.from(new Set([...fences.map(f => f.name), ...YARD_ELECTRONIC_FENCES]));
+  }, [fences]);
+
+  const availableAreaConfigs = useMemo(() => {
+    const baseConfigs = POLICY_TYPE_AREA_MAP[type] || [];
+    return baseConfigs.map(cfg =>
+      cfg.areaType === '电子围栏'
+        ? { ...cfg, targets: allFenceTargets }
+        : cfg
+    );
+  }, [type, allFenceTargets]);
+
   // 是否为不需要选择区域范围的策略类型（例如智能标签状态类）
   const isNoAreaNeeded = availableAreaConfigs.length === 0;
   // 动态控制人员范围与策略条件显隐及作业票联动规则
@@ -531,17 +612,16 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
           }
         }
 
-        // 人员范围回填：仅限工种类别或作业班组，是或不是
+        // 人员范围回填：仅限工种类别或作业班组，逻辑关系固定为包含
         if (editRule.personConditions && editRule.personConditions.length > 0) {
           const usedScopes = new Set<string>();
-          const sanitizedPersons: Array<{ scope: '工种类别' | '作业班组'; relation: '是' | '不是'; target: string }> = [];
+          const sanitizedPersons: Array<{ scope: '工种类别' | '作业班组'; relation: '包含'; target: string }> = [];
 
           editRule.personConditions.forEach(c => {
             if (c.scope === '作业票关联') return;
             const scopeVal: '工种类别' | '作业班组' = (c.scope === '作业班组') ? '作业班组' : '工种类别';
             if (!usedScopes.has(scopeVal)) {
               usedScopes.add(scopeVal);
-              const relationVal: '是' | '不是' = (c.relation === '否' || c.relation === '不是') ? '不是' : '是';
               let targetVal = c.target || '';
               if (scopeVal === '工种类别' && !SHIPYARD_WORK_TYPES.includes(targetVal)) {
                 targetVal = SHIPYARD_WORK_TYPES[0];
@@ -550,7 +630,7 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
               }
               sanitizedPersons.push({
                 scope: scopeVal,
-                relation: relationVal,
+                relation: '包含',
                 target: targetVal
               });
             }
@@ -558,11 +638,11 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
 
           setPersonConditions(sanitizedPersons.length > 0 ? sanitizedPersons : [{
             scope: '工种类别',
-            relation: '是',
+            relation: '包含',
             target: SHIPYARD_WORK_TYPES[0]
           }]);
         } else {
-          setPersonConditions([{ scope: '工种类别', relation: '是', target: SHIPYARD_WORK_TYPES[0] }]);
+          setPersonConditions([{ scope: '工种类别', relation: '包含', target: SHIPYARD_WORK_TYPES[0] }]);
         }
 
         // 策略条件回填
@@ -653,13 +733,13 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
         setAreaConditions([{ 
           type: '电子围栏', 
           relation: '是', 
-          target: YARD_ELECTRONIC_FENCES[0] 
+          target: getStoredFences()[0]?.name || YARD_ELECTRONIC_FENCES[0] 
         }]);
 
-        // 初始人员范围：工种类别
+        // 初始人员范围：工种类别（包含）
         setPersonConditions([{ 
           scope: '工种类别', 
-          relation: '是', 
+          relation: '包含', 
           target: SHIPYARD_WORK_TYPES[0] 
         }]);
 
@@ -674,13 +754,13 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
           timeEnd: '23:59'
         }]);
 
-        setLowTarget('当班区域安全员');
+        setLowTarget('周卫国、李建军');
         setLowCountdown('3');
         setLowUnit('分钟');
-        setMidTarget('车间安全主任');
+        setMidTarget('杨培林');
         setMidCountdown('5');
         setMidUnit('分钟');
-        setHighTarget('厂级安全总监与应急指挥中心');
+        setHighTarget('黄潘增');
         setNotifySoundLight(true);
         setNotifySms(true);
         setAlarmInterval('不重复');
@@ -726,10 +806,13 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
           target: defaultPrj.name
         }]);
       } else {
+        const defaultTarget = firstCfg.areaType === '电子围栏'
+          ? (allFenceTargets[0] || '')
+          : (firstCfg.targets[0] || '');
         setAreaConditions([{
           type: firstCfg.areaType,
           relation: '是',
-          target: firstCfg.targets[0] || ''
+          target: defaultTarget
         }]);
       }
     }
@@ -785,7 +868,9 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
         }
       ]);
     } else {
-      const defaultTarget = nextCfg.targets[0] || '';
+      const defaultTarget = nextCfg.areaType === '电子围栏'
+        ? (allFenceTargets[0] || '')
+        : (nextCfg.targets[0] || '');
       setAreaConditions([...areaConditions, { type: nextCfg.areaType, relation: '是', target: defaultTarget }]);
     }
   };
@@ -807,7 +892,7 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
       ...personConditions, 
       { 
         scope: nextScope, 
-        relation: '是', 
+        relation: '包含', 
         target: nextScope === '工种类别' ? SHIPYARD_WORK_TYPES[0] : SHIPYARD_WORK_TEAMS[0] 
       }
     ]);
@@ -867,6 +952,11 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
           return;
         }
       }
+    }
+
+    if (!lowTarget.trim() && !midTarget.trim() && !highTarget.trim()) {
+      setErrorMsg('请至少配置一个告警等级的通知人员');
+      return;
     }
 
     const now = new Date();
@@ -1196,10 +1286,18 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                 <>
                   {areaConditions.map((cond, idx) => {
                     const currentCfg = availableAreaConfigs.find(c => c.areaType === cond.type);
-                    const currentTargets = currentCfg ? currentCfg.targets : (cond.target ? [cond.target] : []);
+                    const currentTargets = currentCfg
+                      ? (cond.target && !currentCfg.targets.includes(cond.target)
+                          ? [cond.target, ...currentCfg.targets]
+                          : currentCfg.targets)
+                      : (cond.target ? [cond.target] : []);
+                    const matchedFence = cond.type === '电子围栏'
+                      ? fences.find(f => f.name === cond.target)
+                      : undefined;
 
                     const isWorkface = cond.type === '作业面';
                     const isShipProject = cond.type === '有限空间';
+                    const isElectronicFence = cond.type === '电子围栏';
 
                     // 作业面多选状态
                     const currentWorkfaceBlocks = cond.selectedTargets || [];
@@ -1212,8 +1310,8 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                       <div 
                         key={idx} 
                         className={`rounded-xl transition-all border ${
-                          isWorkface || isShipProject 
-                            ? 'p-3.5 bg-slate-50/80 border-slate-200 shadow-2xs space-y-3' 
+                          isWorkface || isShipProject || isElectronicFence
+                            ? 'p-3.5 bg-slate-50/80 border-slate-200 shadow-2xs space-y-2.5' 
                             : 'p-2.5 bg-slate-50/40 border-slate-200 space-y-2'
                         }`}
                       >
@@ -1317,9 +1415,14 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                               className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-blue-500 text-[13px] bg-white font-medium cursor-pointer"
                             >
                               <option value="" disabled hidden>请选择指定设备或范围</option>
-                              {currentTargets.map(t => (
-                                <option key={t} value={t}>{t}</option>
-                              ))}
+                              {currentTargets.map(t => {
+                                const fInfo = isElectronicFence ? fences.find(f => f.name === t) : undefined;
+                                return (
+                                  <option key={t} value={t}>
+                                    {fInfo ? `${t} (上限 ${fInfo.maxCapacity ?? 20} 人)` : t}
+                                  </option>
+                                );
+                              })}
                             </select>
                           )}
 
@@ -1347,6 +1450,44 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                             </button>
                           )}
                         </div>
+
+                        {/* 电子围栏联动信息卡：展示围栏编号、类型及区域核定上限人数 */}
+                        {isElectronicFence && cond.target && (
+                          <div className={`px-3 py-2 rounded-lg border text-xs flex flex-wrap items-center justify-between gap-2 ${
+                            type === '人数超员'
+                              ? 'bg-blue-50/80 border-blue-200 text-blue-900'
+                              : 'bg-white border-slate-200 text-slate-700'
+                          }`}>
+                            {matchedFence ? (
+                              <>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                                    {matchedFence.code}
+                                  </span>
+                                  <span className="text-slate-500">
+                                    {matchedFence.scopeType === 'yard' ? '厂区公共围栏' : `船舶项目 (${matchedFence.projectName})`} · {matchedFence.type}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 font-semibold">
+                                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>区域上限人数:</span>
+                                  <span className="font-mono font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded border border-blue-200">
+                                    {matchedFence.maxCapacity ?? 20} 人
+                                  </span>
+                                  {type === '人数超员' && (
+                                    <span className="text-[11px] text-blue-700 font-normal ml-1">
+                                      (超出此核定上限将触发超员告警)
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-slate-500 text-[11px]">
+                                历史内置围栏引用；如需设定或调整区域上限人数，请在「电子围栏」模块新建或配置围栏。
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {/* A. 若为“作业面”：支持厂区作业面批量多选 */}
                         {isWorkface && (
@@ -1760,23 +1901,10 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
                             })}
                           </select>
 
-                          {/* 关系筛选：只允许“是”与“不是”两种范围 */}
-                          <select 
-                            value={cond.relation}
-                            onChange={(e) => {
-                              const updated = [...personConditions];
-                              updated[idx].relation = e.target.value as '是' | '不是';
-                              setPersonConditions(updated);
-                            }}
-                            className={`w-32 px-3 py-1.5 border rounded-lg text-[13px] bg-white font-bold cursor-pointer ${
-                              cond.relation === '是' 
-                                ? 'border-emerald-300 text-emerald-700 bg-emerald-50/30' 
-                                : 'border-rose-300 text-rose-700 bg-rose-50/30'
-                            }`}
-                          >
-                            <option value="是">是 (包含此类)</option>
-                            <option value="不是">不是 (排除此类)</option>
-                          </select>
+                          {/* 关系筛选：工种或班组逻辑关系仅支持“包含” */}
+                          <span className="px-3 py-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50/60 rounded-lg text-[13px] font-bold shrink-0 select-none">
+                            包含
+                          </span>
 
                           {/* 目标工种或班组下拉列表 */}
                           <select 
@@ -2037,32 +2165,35 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
             <label className="w-28 text-right pr-4 pt-2 text-slate-600 shrink-0 font-medium">
               <span className="text-red-500 mr-1">*</span>通知人员:
             </label>
-            <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+            <div className="flex-1 border border-slate-200 rounded-xl overflow-visible shadow-2xs bg-white">
               <table className="w-full text-left text-[13px]">
                 <thead className="bg-[#fafafa] border-b border-slate-200 text-slate-600 font-medium">
                   <tr>
-                    <th className="py-2.5 px-4 w-20 text-center">等级</th>
-                    <th className="py-2.5 px-4"><span className="text-red-500 mr-1">*</span>通知对象</th>
-                    <th className="py-2.5 px-4 w-64">触发升级倒计时</th>
+                    <th className="py-2.5 px-4 w-20 text-center rounded-tl-xl">等级</th>
+                    <th className="py-2.5 px-4"><span className="text-red-500 mr-1">*</span>通知对象 (支持模糊查询、多选)</th>
+                    <th className="py-2.5 px-4 w-64 rounded-tr-xl">触发升级倒计时</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
                   {/* 低等级 */}
                   <tr>
-                    <td className="py-2.5 px-4 text-center font-bold text-blue-600">低</td>
+                    <td className="py-2.5 px-4 text-center font-bold text-blue-600 align-top pt-3.5">低</td>
                     <td className="py-2.5 px-4">
-                      <select 
+                      <PersonnelMultiSelect
                         value={lowTarget}
-                        onChange={(e) => setLowTarget(e.target.value)}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 text-[13px] bg-white cursor-pointer"
-                      >
-                        <option value="" disabled hidden>请选择通知对象</option>
-                        <option value="当班区域安全员">当班区域安全员</option>
-                        <option value="现场施工班组长">现场施工班组长</option>
-                        <option value="车间调度员">车间调度员</option>
-                      </select>
+                        onChange={(val) => {
+                          setLowTarget(val);
+                          if (errorMsg) setErrorMsg('');
+                        }}
+                        options={notificationPersonnelOptions}
+                        placeholder="搜索姓名、部门、岗位选择低级通知人员（可多选）"
+                        accentColor="blue"
+                        dropdownPlacement="bottom"
+                        isOpen={openNotifyDropdown === 'low'}
+                        onOpenChange={(open) => setOpenNotifyDropdown(open ? 'low' : null)}
+                      />
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className="py-2.5 px-4 align-top">
                       <div className="flex items-center gap-2">
                         <input 
                           type="text" 
@@ -2085,20 +2216,23 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
 
                   {/* 中等级 */}
                   <tr>
-                    <td className="py-2.5 px-4 text-center font-bold text-amber-600">中</td>
+                    <td className="py-2.5 px-4 text-center font-bold text-amber-600 align-top pt-3.5">中</td>
                     <td className="py-2.5 px-4">
-                      <select 
+                      <PersonnelMultiSelect
                         value={midTarget}
-                        onChange={(e) => setMidTarget(e.target.value)}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 text-[13px] bg-white cursor-pointer"
-                      >
-                        <option value="" disabled hidden>请选择通知对象</option>
-                        <option value="车间安全主任">车间安全主任</option>
-                        <option value="造船项目副经理">造船项目副经理</option>
-                        <option value="生产作业部长">生产作业部长</option>
-                      </select>
+                        onChange={(val) => {
+                          setMidTarget(val);
+                          if (errorMsg) setErrorMsg('');
+                        }}
+                        options={notificationPersonnelOptions}
+                        placeholder="搜索姓名、部门、岗位选择中级通知人员（可多选）"
+                        accentColor="amber"
+                        dropdownPlacement="bottom"
+                        isOpen={openNotifyDropdown === 'mid'}
+                        onOpenChange={(open) => setOpenNotifyDropdown(open ? 'mid' : null)}
+                      />
                     </td>
-                    <td className="py-2.5 px-4">
+                    <td className="py-2.5 px-4 align-top">
                       <div className="flex items-center gap-2">
                         <input 
                           type="text" 
@@ -2121,20 +2255,23 @@ export function AlarmFormModal({ isOpen, onClose, onSubmit, editRule }: AlarmFor
 
                   {/* 高等级 */}
                   <tr>
-                    <td className="py-2.5 px-4 text-center font-bold text-red-600">高</td>
+                    <td className="py-2.5 px-4 text-center font-bold text-red-600 align-top pt-3.5 rounded-bl-xl">高</td>
                     <td className="py-2.5 px-4">
-                      <select 
+                      <PersonnelMultiSelect
                         value={highTarget}
-                        onChange={(e) => setHighTarget(e.target.value)}
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-slate-800 text-[13px] bg-white cursor-pointer"
-                      >
-                        <option value="" disabled hidden>请选择通知对象</option>
-                        <option value="厂级安全总监与应急指挥中心">厂级安全总监与应急指挥中心</option>
-                        <option value="船厂总工程师与厂长">船厂总工程师与厂长</option>
-                        <option value="造船项目第一负责人">造船项目第一负责人</option>
-                      </select>
+                        onChange={(val) => {
+                          setHighTarget(val);
+                          if (errorMsg) setErrorMsg('');
+                        }}
+                        options={notificationPersonnelOptions}
+                        placeholder="搜索姓名、部门、岗位选择高级通知人员（可多选）"
+                        accentColor="red"
+                        dropdownPlacement="top"
+                        isOpen={openNotifyDropdown === 'high'}
+                        onOpenChange={(open) => setOpenNotifyDropdown(open ? 'high' : null)}
+                      />
                     </td>
-                    <td className="py-2.5 px-4 text-slate-400 text-xs italic">
+                    <td className="py-2.5 px-4 text-slate-400 text-xs italic align-middle rounded-br-xl">
                       最高级别无需升级
                     </td>
                   </tr>

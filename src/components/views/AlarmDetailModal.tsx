@@ -312,7 +312,9 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
                       <span className="font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 text-[11px] shrink-0">
                         {cond.scope === '作业票关联'
                           ? '默认关联'
-                          : (cond.relation === '否' || cond.relation === '不是') ? '排除(不是)' : '包含(是)'}
+                          : (cond.scope === '工种类别' || cond.scope === '作业班组')
+                            ? '包含'
+                            : (cond.relation === '否' || cond.relation === '不是') ? '排除(不是)' : '包含'}
                       </span>
                       <span className="font-bold text-slate-800 truncate">{cond.target || '全体工人'}</span>
                     </div>
@@ -364,7 +366,17 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
                 <tr>
                   <td className="py-3 px-4 text-center font-bold text-blue-600">低</td>
                   <td className="py-3 px-4 font-medium text-slate-800">
-                    {snapshot.notifyTargets?.low || <span className="text-slate-300">未配置</span>}
+                    {snapshot.notifyTargets?.low ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {snapshot.notifyTargets.low.split(/[、,，]/).map(s => s.trim()).filter(Boolean).map((p, i) => (
+                          <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 text-[11px] font-medium">
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">未配置</span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-slate-600 font-mono">
                     {snapshot.notifyTargets?.lowCountdown ? (
@@ -379,7 +391,17 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
                 <tr>
                   <td className="py-3 px-4 text-center font-bold text-amber-600">中</td>
                   <td className="py-3 px-4 font-medium text-slate-800">
-                    {snapshot.notifyTargets?.mid || <span className="text-slate-300">未配置</span>}
+                    {snapshot.notifyTargets?.mid ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {snapshot.notifyTargets.mid.split(/[、,，]/).map(s => s.trim()).filter(Boolean).map((p, i) => (
+                          <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-medium">
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">未配置</span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-slate-600 font-mono">
                     {snapshot.notifyTargets?.midCountdown ? (
@@ -394,7 +416,17 @@ export function AlarmDetailModal({ isOpen, rule, onClose, onEdit }: AlarmDetailM
                 <tr>
                   <td className="py-3 px-4 text-center font-bold text-red-600">高</td>
                   <td className="py-3 px-4 font-medium text-slate-800">
-                    {snapshot.notifyTargets?.high || <span className="text-slate-300">未配置</span>}
+                    {snapshot.notifyTargets?.high ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {snapshot.notifyTargets.high.split(/[、,，]/).map(s => s.trim()).filter(Boolean).map((p, i) => (
+                          <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md bg-rose-50 text-rose-800 border border-rose-200 text-[11px] font-medium">
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">未配置</span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-slate-400 italic">
                     最高级告警，即时全员警报

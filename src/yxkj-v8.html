@@ -413,6 +413,8 @@
       .m-sub-row b{ color:#ffffff; font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:700; margin:0 2px; }
       .m-sub-row .m-sub-link{ color:var(--cyan); font-weight:700; font-size:11.5px; flex:none; opacity:.9; }
       .m-sub-row .m-sub-sep{ opacity:.35; }
+      .m-sub-row .m-sub-hit{ cursor:pointer; transition:color .15s; border-radius:4px; padding:1px 3px; margin:-1px -3px; }
+      .m-sub-row .m-sub-hit:hover{ color:#00e5ff; background:rgba(0,229,255,.1); }
 
       /* ---------- Overview time controls ---------- */
       .time-ctl-bar{ display:flex; align-items:center; gap:8px; margin-right:10px; }
@@ -752,7 +754,7 @@
             <h2>数据概览</h2>
             <span class="en">Core Safety KPI Overview</span>
             <span class="sp"></span>
-            <div class="time-ctl-bar" aria-label="统计时间选择">
+            <div class="time-ctl-bar" aria-label="统计时间选择" style="display:none">
               <div class="time-seg" role="tablist" aria-label="统计周期">
                 <button type="button" class="time-btn active" data-tmode="today">今日实时</button>
                 <button type="button" class="time-btn" data-tmode="yesterday">昨日</button>
@@ -1411,6 +1413,8 @@
       spaces: [], sets: null, selIdx: 0, detailIdx: -1, videoIdx: -1,
       timeMode: "today", customDate: getYesterdayStr(),
       detailTab: "cur", analyticsTab: "boarded",
+      boardedFilter: "ALL", engineFilter: "ALL",
+      confViewMode: "spaces", confCrewFilter: "ALL",
       confFilter: "ALL", histAlarmFilter: "ALL", histScope: "PERIOD",
       notifiedSpaces: {}
     };
@@ -1464,7 +1468,7 @@
       return (nameHash(n) % 4 === 0) ? "密性实验" : "无人状态";
     }
 
-    function makeSpace(def, idx, isConfined, deptName){
+    function makeSpace(def, idx, isConfined, deptName, isYard){
       spaceSeq++;
       var entered, working;
       if(def.fixed){
@@ -1498,18 +1502,19 @@
       var gas = def.gas ? { o2:def.gas.o2, co:def.gas.co, h2s:def.gas.h2s, lel:def.gas.lel } : baseGas(def.warn);
       if(def.forceOver) gas._fo = def.forceOver;
       var cabinStatus = deriveCabinStatus(def, entered, def.forbid, isConfined);
-      /* 审批单据状态：闯入空间或密性实验未授权入舱标记为无审批单据进入 */
-      var unapprovedCurrent = (def.forbid === "intrude" && entered > 0) || (isConfined && cabinStatus === "密性实验" && idx === 1 && entered > 0);
-      var hasApproval = !unapprovedCurrent && def.forbid !== "empty";
-      var unapprovedHistoryCount = unapprovedCurrent ? ri(1, 2) : ((isConfined && (idx === 4 || idx === 7 || idx === 11)) ? 1 : 0);
-      var workedToday = entered > 0 || (isConfined && (idx % 4 === 0));
-      var permitCode = unapprovedCurrent ? "无审批单据" : (def.permit || ("YXKJ-2026-" + pad(ri(1,28)) + "-" + (1040 + spaceSeq*7 + idx)));
+      /* 审批单据状态：厂区区域去除审批单据逻辑；船舶项目闯入空间或密性实验未授权入舱标记为无审批单据进入 */
+      var unapprovedCurrent = isYard ? false : ((def.forbid === "intrude" && entered > 0) || (isConfined && cabinStatus === "密性实验" && idx === 1 && entered > 0));
+      var hasApproval = isYard ? true : (!unapprovedCurrent && def.forbid !== "empty");
+      var unapprovedHistoryCount = isYard ? 0 : (unapprovedCurrent ? ri(1, 2) : ((isConfined && (idx === 4 || idx === 7 || idx === 11)) ? 1 : 0));
+      var workedToday = entered > 0 || (isConfined && (idx % 4 === 0)) || (!isConfined && (idx % 3 === 0));
+      var permitCode = isYard ? "" : (unapprovedCurrent ? "无审批单据" : (def.permit || ("YXKJ-2026-" + pad(ri(1,28)) + "-" + (1040 + spaceSeq*7 + idx))));
 
       var s = {
         name:def.n, en:def.e, deptName: deptName || "", lim:def.lim, warn:def.warn||null,
         vol: def.vol != null ? def.vol : deriveVol(def),
         fixed:!!def.fixed, forbid:def.forbid||null,
         isConfined: !!isConfined,
+        isYard: !!isYard,
         cabinStatus: cabinStatus,
         hasApproval: hasApproval,
         unapprovedCurrent: unapprovedCurrent,
@@ -1532,7 +1537,7 @@
     }
     function pick2guardian(){ return GUARDIANS[ri(0, GUARDIANS.length-1)]; }
 
-    /* 空间内人员花名册：包含班组/工种与审批状态，有限空间支持>2小时连续作业换气提醒 */
+    /* 空间内人员花名册：包含班组/工种与审批状态，有限空间支持>2小时连续作业提示 */
     function makeCrew(s, yard, spIdx){
       var teams = yard ? CREW_TEAMS.yard : CREW_TEAMS.ship;
       var used = {}, crew = [], guard = 0;
@@ -1541,18 +1546,18 @@
         if(used[nm]) continue;
         used[nm] = 1;
         var teamIdx = ri(0, teams.length-1);
-        /* 厂区作业面不需要超2小时换气提示；有限空间及船上重点区域按需生成 */
+        /* 厂区作业面不需要超2小时作业提示；有限空间及船上重点区域按需生成 */
         var allowOver2h = !(yard && !s.isConfined);
         var forceOver2h = allowOver2h && ((crew.length === 0 && (s.entered >= 4 || (spIdx % 3 === 0 && s.isConfined))) || (crew.length === 1 && s.entered >= 7));
         var minsAgo = forceOver2h ? ri(128, 225) : ri(14, 114);
-        var wApproval = !s.unapprovedCurrent;
+        var wApproval = yard ? true : !s.unapprovedCurrent;
         crew.push({
           id: "SY" + (10000 + ((spaceSeq*97 + crew.length*131 + ri(0,50)) % 89999)),
           name: nm,
           trade: CREW_TRADES[ri(0, CREW_TRADES.length-1)],
           team: teams[teamIdx],
           hasApproval: wApproval,
-          permitCode: wApproval ? s.permit : "无审批单据",
+          permitCode: yard ? "" : (wApproval ? s.permit : "无审批单据"),
           entryTs: Date.now() - minsAgo*60000 - ri(0,59)*1000
         });
       }
@@ -1586,8 +1591,8 @@
           var endTotalMins = startHour * 60 + startMin + stayMins;
           var endHour = Math.min(23, Math.floor(endTotalMins / 60));
           var endMin = endTotalMins % 60;
-          var isUnappRec = (s.unapprovedHistoryCount > 0 && k === 0 && (dayOff === 0 || dayOff === 1));
-          var exitReason = isUnappRec ? "未审批进入拦截" : (stayMins >= 120 ? "超2h换气出舱" : "正常出舱");
+          var isUnappRec = yard ? false : (s.unapprovedHistoryCount > 0 && k === 0 && (dayOff === 0 || dayOff === 1));
+          var exitReason = yard ? "正常离开" : (isUnappRec ? "未审批进入拦截" : (stayMins >= 120 ? "超2小时作业" : "正常出舱"));
           records.push({
             dateStr: dStr,
             dayOffset: dayOff,
@@ -1600,7 +1605,7 @@
             exitTimeStr: pad(endHour) + ":" + pad(endMin) + ":00",
             stayMins: stayMins,
             hasApproval: !isUnappRec,
-            permitCode: isUnappRec ? "无审批单据" : ("YXKJ-" + dStr.replace(/-/g, "").slice(2) + "-" + pad(spIdx+1) + k),
+            permitCode: yard ? "" : (isUnappRec ? "无审批单据" : ("YXKJ-" + dStr.replace(/-/g, "").slice(2) + "-" + pad(spIdx+1) + k)),
             exitReason: exitReason,
             spaceName: s.name,
             isConfined: s.isConfined,
@@ -1611,13 +1616,13 @@
       return records;
     }
 
-    /* 为单个空间生成近7日历史告警信息（未审批进入、超2h换气、气体超限、禁入闯入） */
+    /* 为单个空间生成历史告警信息（未审批进入、超2小时作业、气体超限、禁入闯入） */
     function makeHistoryAlarms(s, yard, spIdx, records){
       var alarms = [];
       var activeDays = {};
       (records || []).forEach(function(r){
         activeDays[r.dayOffset] = true;
-        if(!r.hasApproval){
+        if(!yard && !r.hasApproval){
           alarms.push({
             id: "ALM-U-" + spIdx + "-" + r.dayOffset + "-" + r.id,
             dateStr: r.dateStr,
@@ -1638,12 +1643,12 @@
             dateStr: r.dateStr,
             dayOffset: r.dayOffset,
             timeStr: r.exitTimeStr,
-            alarmType: "超2h换气告警",
+            alarmType: "超2小时作业告警",
             level: "warn",
             personName: r.name,
             workerId: r.id,
-            detail: "连续作业时长达 " + fmtStayMins(r.stayMins) + "（超过2小时安全时限），触发超2h换气提示，已通知组织出舱换气。",
-            status: "已换气出舱",
+            detail: "连续作业时长达 " + fmtStayMins(r.stayMins) + "（超过2小时安全时限），触发超2小时作业提示，已通知监护人跟进。",
+            status: "已提醒出舱",
             handler: s.guardian
           });
         }
@@ -1691,9 +1696,12 @@
       var records = [];
       var alarms = [];
 
-      if(tMode === "ALL7" || tMode === "today"){
+      if(tMode === "ALL7"){
         records = histRecs.slice();
         alarms = histAlms.slice();
+      } else if(tMode === "today"){
+        records = histRecs.filter(function(r){ return r.dayOffset === 0 || r.isToday; });
+        alarms = histAlms.filter(function(a){ return a.dayOffset === 0; });
       } else if(tMode === "yesterday"){
         records = histRecs.filter(function(r){ return r.dayOffset === 1; });
         alarms = histAlms.filter(function(a){ return a.dayOffset === 1; });
@@ -1776,6 +1784,8 @@
       });
     }
     function buildSpaces(){
+      if(state.region === "yard") state.mode = "workface";
+      else if(state.mode === "workface") state.mode = "confined";
       if(state.proj === YARD_ALL_IDX){
         var allC = [], allW = [];
         for(var pi = YARD_START; pi < PROJECTS.length; pi++){
@@ -1783,14 +1793,14 @@
           _seed = 987654 + pi * 100003;
           spaceSeq = pi * 100;
           (dp.confined || []).forEach(function(d, idx){
-            var sp = makeSpace(d, idx, true, dp.name);
+            var sp = makeSpace(d, idx, true, dp.name, true);
             sp.crew = makeCrew(sp, true, idx);
             sp.historyRecords = makeHistoryRecords(sp, true, idx);
             sp.historyAlarms = makeHistoryAlarms(sp, true, idx, sp.historyRecords);
             allC.push(sp);
           });
           (dp.workface || []).forEach(function(d, idx){
-            var sp = makeSpace(d, idx, false, dp.name);
+            var sp = makeSpace(d, idx, false, dp.name, true);
             sp.crew = makeCrew(sp, true, idx + 30);
             sp.historyRecords = makeHistoryRecords(sp, true, idx + 30);
             sp.historyAlarms = makeHistoryAlarms(sp, true, idx + 30, sp.historyRecords);
@@ -1808,14 +1818,14 @@
         var yard = projRegion(state.proj) === "yard";
         var extraC = yard ? EXTRA_YARD_CONFINED : EXTRA_SHIP_CONFINED;
         var rawC = (yard && p.confined && p.confined.length >= 6 ? p.confined : p.confined.concat(extraC)).map(function(d,i){
-          var sp = makeSpace(d, i, true, p.name);
+          var sp = makeSpace(d, i, true, p.name, yard);
           sp.crew = makeCrew(sp, yard, i);
           sp.historyRecords = makeHistoryRecords(sp, yard, i);
           sp.historyAlarms = makeHistoryAlarms(sp, yard, i, sp.historyRecords);
           return sp;
         });
         var rawW = (yard ? p.workface : p.workface.concat(EXTRA_SHIP_WORKFACE)).map(function(d,i){
-          var sp = makeSpace(d, i, false, p.name);
+          var sp = makeSpace(d, i, false, p.name, yard);
           sp.crew = makeCrew(sp, yard, i + 30);
           sp.historyRecords = makeHistoryRecords(sp, yard, i + 30);
           sp.historyAlarms = makeHistoryAlarms(sp, yard, i + 30, sp.historyRecords);
@@ -1904,7 +1914,7 @@
         if(data.highAlarms.length > 0){
           hLeft = '<span class="cf-chip unapproved">⚠️ 历史告警 '+data.alarms.length+' 条</span>';
         } else if(data.warnAlarms.length > 0){
-          hLeft = '<span class="cf-chip vent">⚠️ 历史预警 '+data.alarms.length+' 条</span>';
+          hLeft = '<span class="cf-chip vent">⏱ 历史预警 '+data.alarms.length+' 条</span>';
         } else if(data.count > 0){
           hLeft = '<span class="cf-chip ok">✓ 无历史告警</span>';
         } else {
@@ -1915,28 +1925,13 @@
       }
       var over2h = getOver2hCrew(s);
       var isYardWorkface = (state.region === "yard" && !s.isConfined);
-      var leftHtml = '';
-      if(s.unapprovedCurrent){
-        leftHtml += '<span class="cf-chip unapproved">⚠️ 未审批进入</span>';
-      } else if(s.unapprovedHistoryCount > 0){
-        leftHtml += '<span class="cf-chip hist-unapp">⚠️ 曾无审批进入</span>';
-      }
-      if(!leftHtml){
-        if(s.entered > 0){
-          leftHtml = '<span class="cf-chip ok">✓ 审批有效</span>';
-        } else {
-          leftHtml = '<span class="cf-chip muted">'+(s.workedToday ? '今日曾作业' : '今日未入舱')+'</span>';
-        }
-      }
-      var rightHtml = '';
       if(!isYardWorkface && over2h.length > 0){
-        rightHtml = '<span class="cf-chip vent" title="有作业超过2小时人员，需安排换气">💨 超2h换气提示</span>';
+        return '<div class="card-foot"><div class="cf-left"></div><div class="cf-right"><span class="cf-chip vent" title="有人员连续作业超过2小时">⏱ 超 2 小时作业</span></div></div>';
       }
-      return '<div class="card-foot"><div class="cf-left">'+leftHtml+'</div>'+(rightHtml ? '<div class="cf-right">'+rightHtml+'</div>' : '')+'</div>';
+      return '';
     }
     function cardHTML(s, i){
-      var sw = specialWorkTag(s);
-      var swHtml = sw ? '<span class="special-tag '+sw.cls+'">'+sw.text+'</span>' : '';
+      var swHtml = '';
       if(isShipHistMode()){
         var hd = getSpaceHistoryData(s);
         var tl = getTimeLabel();
@@ -2140,11 +2135,9 @@
         var card = cardsEl.querySelector('[data-card="'+i+'"]');
         if(!card) return;
         var st = spaceStatus(s);
-        var sw = specialWorkTag(s);
         var badgesEl = card.querySelector(".card-badges");
         if(badgesEl){
-          var swHtml = sw ? '<span class="special-tag '+sw.cls+'">'+sw.text+'</span>' : '';
-          badgesEl.innerHTML = swHtml + '<span class="badge '+st.k+'">'+st.t+'</span>';
+          badgesEl.innerHTML = '<span class="badge '+st.k+'">'+st.t+'</span>';
         } else {
           var badge = card.querySelector(".badge");
           if(badge){ badge.className = "badge " + st.k; badge.textContent = st.t; }
@@ -2196,8 +2189,13 @@
           }
         }
         var footEl = card.querySelector(".card-foot");
+        var newFoot = buildCardFootHTML(s);
         if(footEl){
-          footEl.outerHTML = buildCardFootHTML(s);
+          if(newFoot) footEl.outerHTML = newFoot;
+          else footEl.remove();
+        } else if(newFoot){
+          var bodyEl = card.querySelector(".card-body");
+          if(bodyEl) bodyEl.insertAdjacentHTML("beforeend", newFoot);
         }
       });
     }
@@ -2214,7 +2212,7 @@
     var YARD_ICONS = {
       yard_total:        '<img src="/assets/overview_icons/yard_icon_1_final.png" alt="厂区总人数" class="ov-pic-ico yard-pic-ico" />',
       yard_cumulative:   '<img src="/assets/overview_icons/yard_icon_2_final.png" alt="重点作业人数" class="ov-pic-ico yard-pic-ico" />',
-      yard_active_field: '<img src="/assets/overview_icons/yard_icon_3_final.png" alt="有限空间作业总人数" class="ov-pic-ico yard-pic-ico" />',
+      yard_active_field: '<img src="/assets/overview_icons/yard_icon_3_final.png" alt="今日作业总人数" class="ov-pic-ico yard-pic-ico" />',
       yard_zones_active: '<img src="/assets/overview_icons/yard_icon_4_final.png" alt="区域开工数/总数" class="ov-pic-ico yard-pic-ico" />'
     };
     function sumEntered(list){ var t = 0; if(!list) return 0; list.forEach(function(s){ t += s.entered; }); return t; }
@@ -2263,7 +2261,7 @@
           if(s.unapprovedCurrent || c.hasApproval === false || s.forbid === "intrude"){
             status = "未审批进入";
           } else if(stayMins >= 120){
-            status = "超2h待换气";
+            status = "超2小时作业";
           }
           list.push({
             id: c.id,
@@ -2311,7 +2309,7 @@
               ? '<span class="cc-pill work">✓ 无历史告警</span>'
               : (hd.highAlarms.length > 0
                 ? '<span class="cc-pill intrude">⚠️ 严重 ' + hd.highAlarms.length + ' 条' + (hd.warnAlarms.length ? ' · 预警 ' + hd.warnAlarms.length + ' 条' : '') + '</span>'
-                : '<span class="cc-pill timeout">💨 换气预警 ' + hd.warnAlarms.length + ' 条</span>');
+                : '<span class="cc-pill timeout">⏱ 超时预警 ' + hd.warnAlarms.length + ' 条</span>');
             hHtml += '<tr' + rowCls + ' data-cc-space="' + idx + '" style="cursor:pointer">'
               + '<td class="col-name">' + s.name + '</td>'
               + '<td>' + (s.cabinStatus || '作业中') + '</td>'
@@ -2338,7 +2336,7 @@
       var html = '<div class="cc-table-wrap">'
         + '<table class="cc-table">'
         + '<thead><tr>'
-        + '<th>工号</th><th>姓名</th><th>工种 / 班组</th><th>标签编号</th><th>所在舱室 (状态)</th><th>审批单据</th><th>进入时间</th><th>停留 / 换气提示</th>'
+        + '<th>工号</th><th>姓名</th><th>工种 / 班组</th><th>标签编号</th><th>所在舱室 (状态)</th><th>审批单据</th><th>进入时间</th><th>停留 / 作业提示</th>'
         + '</tr></thead>'
         + '<tbody>';
 
@@ -2347,13 +2345,13 @@
       } else {
         allList.forEach(function(p){
           var isIntrude = p.status === "异常闯入" || p.status === "非法闯入" || p.status === "未审批进入" || p.hasApproval === false;
-          var isTimeout = !isIntrude && (p.status === "停留超时" || p.status === "超2h待换气" || (p.durationMinutes || 0) >= 120);
+          var isTimeout = !isIntrude && (p.status === "停留超时" || p.status === "超2h待换气" || p.status === "超2小时作业" || (p.durationMinutes || 0) >= 120);
           var rowCls = isIntrude ? ' class="intrude-row"' : (isTimeout ? ' class="timeout-row"' : '');
           var permitBadge = isIntrude
             ? '<span class="cc-pill intrude">⚠️ 未审批进入</span>'
             : '<span class="cc-pill work">' + (p.permitCode || '已审批') + '</span>';
           var stayBadge = isTimeout
-            ? p.duration + ' <span class="cc-pill timeout" style="margin-left:6px">💨 超2h换气提示</span>'
+            ? p.duration + ' <span class="cc-pill timeout" style="margin-left:6px">⏱ 超 2 小时作业</span>'
             : p.duration;
 
           html += '<tr' + rowCls + '>'
@@ -2518,6 +2516,7 @@
         confCurrent: confCurrent,
         confExited: confExited,
         confSpaces: conf,
+        wfSpaces: wf,
         workedConfSpaces: workedSpaces,
         workedConfCount: workedSpaces.length,
         totalConfCount: totalConfCount,
@@ -2556,7 +2555,7 @@
             num: snap.boardedTotal,
             tot: " 人",
             tag: state.timeMode === "today" ? "全船受控" : "历史台账",
-            subHtml: '<span class="m-sub-items">当前在船 <b>'+snap.onboardCurrent+'</b> 人 <span class="m-sub-sep">|</span> 已下船 <b>'+snap.disembarkedCount+'</b> 人</span><span class="m-sub-link">分类明细 ›</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="boarded" data-filter="CUR">当前在船 <b>'+snap.onboardCurrent+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="boarded" data-filter="EXITED">已下船 <b>'+snap.disembarkedCount+'</b> 人</span></span><span class="m-sub-link" data-drill="boarded" data-filter="ALL">分类明细 ›</span>',
             cls: "c"
           },
           {
@@ -2565,7 +2564,7 @@
             num: snap.erTotal,
             tot: " 人",
             tag: "机舱进出统计",
-            subHtml: '<span class="m-sub-items">当前在机舱 <b>'+snap.erCurrent+'</b> 人 <span class="m-sub-sep">|</span> 已出机舱 <b>'+snap.erExited+'</b> 人</span><span class="m-sub-link">机舱明细 ›</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="engine" data-filter="CUR">当前在机舱 <b>'+snap.erCurrent+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="engine" data-filter="EXITED">已出机舱 <b>'+snap.erExited+'</b> 人</span></span><span class="m-sub-link" data-drill="engine" data-filter="ALL">机舱明细 ›</span>',
             cls: "o"
           },
           {
@@ -2574,7 +2573,7 @@
             num: snap.confTotal,
             tot: " 人",
             tag: "密闭舱室作业",
-            subHtml: '<span class="m-sub-items">当前在舱 <b>'+snap.confCurrent+'</b> 人 <span class="m-sub-sep">|</span> 进入过(已出) <b>'+snap.confExited+'</b> 人</span><span class="m-sub-link">进出明细 ›</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="confined" data-view="crew" data-filter="CUR">当前在舱 <b>'+snap.confCurrent+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="confined" data-view="crew" data-filter="EXITED">进入过(已出) <b>'+snap.confExited+'</b> 人</span></span><span class="m-sub-link" data-drill="confined" data-view="crew" data-filter="ALL">进出明细 ›</span>',
             cls: "b"
           },
           {
@@ -2583,12 +2582,16 @@
             num: snap.workedConfCount,
             tot: " / " + snap.totalConfCount + " 舱",
             tag: "作业率 " + entryRatio + "%",
-            subHtml: '<span class="m-sub-items">当前有人 <b>'+countEntered(snap.confSpaces)+'</b> 舱 <span class="m-sub-sep">|</span> 总进舱 <b>'+snap.confTotal+'</b> 人</span><span class="m-sub-link">舱室清单 ›</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="confined" data-view="spaces" data-filter="ACTIVE">当前有人 <b>'+countEntered(snap.confSpaces)+'</b> 舱</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="confined" data-view="crew" data-filter="ALL">总进舱 <b>'+snap.confTotal+'</b> 人</span></span><span class="m-sub-link" data-drill="confined" data-view="spaces" data-filter="ALL">舱室清单 ›</span>',
             cls: "g"
           }
         ];
       } else {
         var wfPpl = sumEntered(wf);
+        var wfTodayTotal = wfPpl;
+        wf.forEach(function(s){
+          (s.historyRecords || []).forEach(function(rec){ if(rec.isToday) wfTodayTotal++; });
+        });
         var enteredWf = countEntered(wf);
         var totalWf = wf.length || 16;
         var wfRatio = totalWf ? Math.round(enteredWf / totalWf * 100) : 0;
@@ -2600,7 +2603,7 @@
             num: snap.boardedTotal,
             tot: " 人",
             tag: isAllYard ? "全厂汇总" : getProjName(state.proj),
-            subHtml: '<span class="m-sub-items">当前在岗 <b>'+snap.onboardCurrent+'</b> 人 <span class="m-sub-sep">|</span> 已离场 <b>'+snap.disembarkedCount+'</b> 人</span><span class="m-sub-link">分类明细 ›</span>',
+            subHtml: '<span class="m-sub-items">当前在岗 <b>'+snap.onboardCurrent+'</b> 人</span><span class="m-sub-link">分类明细 ›</span>',
             cls: "c"
           },
           {
@@ -2609,16 +2612,16 @@
             num: snap.erTotal || Math.round(snap.boardedTotal * 0.28),
             tot: " 人",
             tag: isAllYard ? "全厂重点工区" : "重点工区统计",
-            subHtml: '<span class="m-sub-items">当前在区 <b>'+snap.erCurrent+'</b> 人 <span class="m-sub-sep">|</span> 已撤离 <b>'+Math.max(0,(snap.erTotal||Math.round(snap.boardedTotal*0.28))-snap.erCurrent)+'</b> 人</span><span class="m-sub-link">明细 ›</span>',
+            subHtml: '<span class="m-sub-items">当前在岗 <b>'+snap.erCurrent+'</b> 人</span><span class="m-sub-link">明细 ›</span>',
             cls: "o"
           },
           {
             ico: YARD_ICONS.yard_active_field,
-            lab: tl + "有限空间作业总人数",
-            num: snap.confTotal,
+            lab: tl + "作业总人数",
+            num: wfTodayTotal,
             tot: " 人",
-            tag: isAllYard ? "全厂有限空间" : "厂区有限空间",
-            subHtml: '<span class="m-sub-items">当前在舱 <b>'+snap.confCurrent+'</b> 人 <span class="m-sub-sep">|</span> 进入过(已出) <b>'+snap.confExited+'</b> 人</span><span class="m-sub-link">明细 ›</span>',
+            tag: isAllYard ? "全厂作业面" : "作业面人员",
+            subHtml: '<span class="m-sub-items">当前在岗 <b>'+wfPpl+'</b> 人</span><span class="m-sub-link">明细 ›</span>',
             cls: "b"
           },
           {
@@ -2627,7 +2630,7 @@
             num: enteredWf,
             tot: " / " + totalWf + " 处",
             tag: "开工率 " + wfRatio + "%",
-            subHtml: '<span class="m-sub-items">作业面在场 <b>'+wfPpl+'</b> 人 <span class="m-sub-sep">|</span> 有限空间 <b>'+snap.workedConfCount+'</b>/'+snap.totalConfCount+' 舱</span><span class="m-sub-link">清单 ›</span>',
+            subHtml: '<span class="m-sub-items">当前在岗 <b>'+wfPpl+'</b> 人</span><span class="m-sub-link">清单 ›</span>',
             cls: "g"
           }
         ];
@@ -2649,7 +2652,18 @@
         if(elNum) elNum.textContent = m[i].num;
         if(elTot) elTot.textContent = m[i].tot;
         if(elTag) elTag.textContent = m[i].tag;
-        if(elSub) elSub.innerHTML = m[i].subHtml;
+        if(elSub){
+          elSub.innerHTML = m[i].subHtml;
+          Array.prototype.forEach.call(elSub.querySelectorAll("[data-drill]"), function(hit){
+            hit.addEventListener("click", function(e){
+              e.stopPropagation();
+              var tab = hit.getAttribute("data-drill");
+              var flt = hit.getAttribute("data-filter") || "ALL";
+              var vw = hit.getAttribute("data-view");
+              openAnalyticsModal(tab, { filter: flt, viewMode: vw });
+            });
+          });
+        }
       }
 
       var box2 = document.getElementById("ovBox2");
@@ -2658,19 +2672,31 @@
 
     /* ---------------- 项目 / 模式 / 时间切换 ---------------- */
     function applyProjectUI(){
+      var isYard = (state.region === "yard");
       var curLabel = state.proj === YARD_ALL_IDX ? "当前区域：全厂所有区域（汇总）" : ("当前项目：" + getProjName(state.proj));
       document.getElementById("curProjName").textContent = curLabel;
-      document.getElementById("tabConfined").classList.toggle("active", state.mode==="confined");
-      document.getElementById("tabWorkface").classList.toggle("active", state.mode==="workface");
+      var tabConf = document.getElementById("tabConfined");
+      var tabWork = document.getElementById("tabWorkface");
       var tabCabinCrew = document.getElementById("tabCabinCrew");
-      if(tabCabinCrew) tabCabinCrew.classList.toggle("active", state.mode==="cabincrew");
+      if(tabConf){
+        tabConf.style.display = isYard ? "none" : "";
+        tabConf.classList.toggle("active", state.mode==="confined");
+      }
+      if(tabCabinCrew){
+        tabCabinCrew.style.display = isYard ? "none" : "";
+        tabCabinCrew.classList.toggle("active", state.mode==="cabincrew");
+      }
+      if(tabWork){
+        tabWork.style.display = isYard ? "" : "none";
+        tabWork.classList.toggle("active", state.mode==="workface");
+      }
       document.getElementById("tabShip").classList.toggle("active", state.region==="ship");
       document.getElementById("tabYard").classList.toggle("active", state.region==="yard");
 
       var cardsEl = document.getElementById("cards");
       var pagerEl = document.getElementById("pager");
       var ccPanelEl = document.getElementById("cabinCrewPanel");
-      if(state.mode === "cabincrew"){
+      if(state.mode === "cabincrew" && !isYard){
         if(cardsEl) cardsEl.style.display = "none";
         if(pagerEl) pagerEl.style.display = "none";
         if(ccPanelEl) ccPanelEl.style.display = "flex";
@@ -2683,16 +2709,18 @@
     function switchProject(i){
       state.proj = i;
       if(projRegion(i) === "yard") {
-        var wasYard = (state.region === "yard");
         state.region = "yard";
-        if(!wasYard || state.mode === "cabincrew") state.mode = "workface";
+        state.mode = "workface";
       } else {
         state.region = "ship";
+        if(state.mode === "workface") state.mode = "confined";
       }
       buildSpaces(); applyProjectUI(); renderProjects(); renderCards(); refreshOverview(); renderCrewStats(); seedLog(true);
       if(state.mode === "cabincrew") renderCabinCrewPanel();
     }
     function switchMode(m){
+      if(state.region === "yard" && m !== "workface") return;
+      if(state.region === "ship" && m === "workface") return;
       if(m === state.mode) return;
       state.mode = m;
       if(m !== "cabincrew"){
@@ -2717,10 +2745,10 @@
     if(tabCabinCrew) tabCabinCrew.addEventListener("click", function(){ switchMode("cabincrew"); });
 
     /* 4个数据概览卡片点击下钻对应分析弹窗 */
-    document.getElementById("ovBox1").addEventListener("click", function(){ openAnalyticsModal("boarded"); });
-    document.getElementById("ovBox2").addEventListener("click", function(){ openAnalyticsModal("engine"); });
-    document.getElementById("ovBox3").addEventListener("click", function(){ openAnalyticsModal("confined"); });
-    document.getElementById("ovBox4").addEventListener("click", function(){ openAnalyticsModal("confined"); });
+    document.getElementById("ovBox1").addEventListener("click", function(){ openAnalyticsModal("boarded", { filter: "ALL" }); });
+    document.getElementById("ovBox2").addEventListener("click", function(){ openAnalyticsModal("engine", { filter: "ALL" }); });
+    document.getElementById("ovBox3").addEventListener("click", function(){ openAnalyticsModal("confined", { viewMode: "crew", filter: "ALL" }); });
+    document.getElementById("ovBox4").addEventListener("click", function(){ openAnalyticsModal("confined", { viewMode: "spaces", filter: "ALL" }); });
 
     function refreshAllForTimeChange(){
       if(state.mode !== "cabincrew"){
@@ -2862,11 +2890,14 @@
       li.setAttribute("data-log", logSeq);
 
       if(isIntr){
+        var intrText = (state.region === "yard" || kind === "intrusion")
+          ? ("违反禁入管控规定擅自进入【" + space.name + "】")
+          : ("未办理有效审批单据进入 " + space.name);
         li.innerHTML = '<span class="lt">'+hm+'</span>'
           + '<span class="badge-intruder" style="font-size:10px;padding:1px 5px;margin-right:2px">'+(kind==="unapproved" ? "⚠️ 未审批进入" : "⚠️ 非法闯入")+'</span>'
           + '<span class="lp-name" style="color:#ff3b5c;font-weight:700;margin-right:4px">'+intruderName+'</span>'
           + '<span class="lp-loc" style="color:#ff9fb0;font-weight:600">进入【'+space.name+'】</span>';
-        li._track = { type:"alarm", isIntrusion:true, msg: hm + " ["+label+"] " + intruderName + "（工号: " + (crew ? crew.id : "SY10928") + "）未办理有效审批单据进入 " + space.name, time: nowTime(), intruderName: intruderName, spaceName: space.name };
+        li._track = { type:"alarm", isIntrusion:true, msg: hm + " ["+label+"] " + intruderName + "（工号: " + (crew ? crew.id : "SY10928") + "）" + intrText, time: nowTime(), intruderName: intruderName, spaceName: space.name };
       } else {
         li.innerHTML = '<span class="lt">'+hm+'</span>'
           + '<span class="lp-act">'+label+'</span>'
@@ -2941,15 +2972,15 @@
       if(state.detailIdx < 0) return;
       var s = state.spaces[state.detailIdx];
       if(!s) return;
+      var isYard = (state.region === "yard");
+      if(isYard) state.detailTab = "cur";
       var crew = s.crew || [];
-      var effectiveScope = (state.timeMode === "today" || state.histScope === "ALL7") ? "ALL7" : state.timeMode;
+      var effectiveScope = state.timeMode;
       var hdPeriod = getSpaceHistoryData(s, effectiveScope);
       var hist = hdPeriod.records;
       var histAlarms = hdPeriod.alarms;
       var isIntrude = isIntrusion(s);
-      var over2h = getOver2hCrew(s);
-      var isYardWorkface = (state.region === "yard" && !s.isConfined);
-      var scopeLabel = effectiveScope === "ALL7" ? "近7日全部" : getTimeLabel();
+      var scopeLabel = getTimeLabel();
 
       /* 更新头部徽标与底部汇总元信息 */
       var b = document.getElementById("dBadge");
@@ -2963,52 +2994,44 @@
         b.textContent = st.t;
       }
 
-      /* 1. 安全告警与换气提醒横幅 */
+      /* 1. 安全告警横幅 */
       var alertsHtml = '';
       if(state.detailTab === "cur"){
-        if(s.unapprovedCurrent){
-          alertsHtml += '<div class="d-alert-box red">'
-            + '<span>🚨 <b>未审批进入告警</b>：检测到当前舱室内有 <b>'+crew.length+'</b> 名人员在<b>无有效有限空间作业审批单据</b>的情况下进入【'+s.name+'】（舱室状态：'+s.cabinStatus+'），请立即核查撤离！</span>'
-            + '</div>';
-        } else if(s.unapprovedHistoryCount > 0){
-          alertsHtml += '<div class="d-alert-box red">'
-            + '<span>⚠️ <b>历史无审批单据进入警示</b>：该舱室近期曾发生 <b>'+s.unapprovedHistoryCount+'</b> 次未办理审批单据入舱记录，请在“历史进出记录”中核查追溯。</span>'
-            + '</div>';
-        }
-        if(!isYardWorkface && over2h.length > 0){
-          var longestMins = Math.max.apply(null, over2h.map(function(w){ return getStayMins(w.entryTs); }));
-          var alreadyNotified = !!state.notifiedSpaces[s.name];
-          alertsHtml += '<div class="d-alert-box amber">'
-            + '<span>💨 <b>作业超 2 小时换气提示</b>：当前有 <b>'+over2h.length+'</b> 人连续作业已达 <b>'+fmtStayMins(longestMins)+'</b>（超过2小时），存在超 2 小时换气提示，请安排进出换气！</span>'
-            + '<button type="button" class="vent-notify-btn'+(alreadyNotified ? ' done' : '')+'" id="notifyVentBtn">'+(alreadyNotified ? '✓ 已下发换气提示' : '下发换气提示')+'</button>'
-            + '</div>';
+        if(!isYard){
+          if(s.unapprovedCurrent){
+            alertsHtml += '<div class="d-alert-box red">'
+              + '<span>🚨 <b>未审批进入告警</b>：检测到当前舱室内有 <b>'+crew.length+'</b> 名人员在<b>无有效有限空间作业审批单据</b>的情况下进入【'+s.name+'】（舱室状态：'+s.cabinStatus+'），请立即核查撤离！</span>'
+              + '</div>';
+          } else if(s.unapprovedHistoryCount > 0){
+            alertsHtml += '<div class="d-alert-box red">'
+              + '<span>⚠️ <b>历史无审批单据进入警示</b>：该舱室今日曾发生 <b>'+s.unapprovedHistoryCount+'</b> 次未办理审批单据入舱记录，请在“历史进出记录”中核查追溯。</span>'
+              + '</div>';
+          }
         }
       } else {
         if(histAlarms.length > 0){
           alertsHtml += '<div class="d-alert-box '+(hdPeriod.highAlarms.length > 0 ? 'red' : 'amber')+'">'
-            + '<span>🚨 <b>历史告警汇总（'+scopeLabel+'）</b>：【'+s.name+'】共进出 <b>'+hist.length+'</b> 人次，累计触发历史告警 <b>'+histAlarms.length+'</b> 条（其中严重告警 <b>'+hdPeriod.highAlarms.length+'</b> 条、预警 <b>'+hdPeriod.warnAlarms.length+'</b> 条），请查看下方历史告警信息明细。</span>'
+            + '<span>🚨 <b>'+scopeLabel+'历史告警汇总</b>：【'+s.name+'】'+scopeLabel+'共进出 <b>'+hist.length+'</b> 人次，触发历史告警 <b>'+histAlarms.length+'</b> 条（其中严重告警 <b>'+hdPeriod.highAlarms.length+'</b> 条、预警 <b>'+hdPeriod.warnAlarms.length+'</b> 条），请查看下方历史告警信息明细。</span>'
             + '</div>';
         } else {
           alertsHtml += '<div class="d-alert-box ok">'
-            + '<span>✓ <b>安全合规记录（'+scopeLabel+'）</b>：【'+s.name+'】共进出 <b>'+hist.length+'</b> 人次，该统计时段内未发生历史安全告警。</span>'
+            + '<span>✓ <b>'+scopeLabel+'安全合规记录</b>：【'+s.name+'】'+scopeLabel+'共进出 <b>'+hist.length+'</b> 人次，未发生历史安全告警。</span>'
             + '</div>';
         }
       }
       document.getElementById("dAlerts").innerHTML = alertsHtml;
-      var notifyBtn = document.getElementById("notifyVentBtn");
-      if(notifyBtn && !state.notifiedSpaces[s.name]){
-        notifyBtn.addEventListener("click", function(){
-          state.notifiedSpaces[s.name] = true;
-          notifyBtn.classList.add("done");
-          notifyBtn.textContent = "✓ 已下发换气提示";
-          toast("已下发【" + s.name + "】超 2 小时作业进出换气提示");
-        });
-      }
 
-      document.getElementById("dTabCur").classList.toggle("active", state.detailTab === "cur");
-      document.getElementById("dTabHist").classList.toggle("active", state.detailTab === "hist");
-      document.getElementById("dTabCur").textContent = "当前进出记录 (" + crew.length + "人)";
-      document.getElementById("dTabHist").textContent = "历史进出与告警 (" + hist.length + "人 / " + histAlarms.length + "警)";
+      var tabCurEl = document.getElementById("dTabCur");
+      var tabHistEl = document.getElementById("dTabHist");
+      if(tabCurEl){
+        tabCurEl.classList.toggle("active", state.detailTab === "cur");
+        tabCurEl.textContent = isYard ? ("当前在岗人员 (" + crew.length + "人)") : ("当前进出记录 (" + crew.length + "人)");
+      }
+      if(tabHistEl){
+        tabHistEl.style.display = isYard ? "none" : "";
+        tabHistEl.classList.toggle("active", state.detailTab === "hist");
+        tabHistEl.textContent = "今日历史进出与告警 (" + hist.length + "人 / " + histAlarms.length + "警)";
+      }
 
       var subCtlEl = document.getElementById("dCrewSubCtl");
       var crewWrapEl = document.getElementById("dCrewWrap");
@@ -3019,68 +3042,67 @@
         if(alarmsSecEl) alarmsSecEl.style.display = "none";
         if(crewWrapEl) crewWrapEl.style.maxHeight = "342px";
         var titleExtra = isIntrude ? ' <span class="badge-intruder" style="margin-left:10px">⚠️ 非法闯入</span>' : '';
-        document.getElementById("dCrewTitle").innerHTML = "当前在舱人员名单 · 共 " + crew.length + " 人" + titleExtra;
-        crewWrapEl.innerHTML = crew.length
-          ? '<table class="crew-table"><thead><tr><th>工号</th><th>姓名</th><th>工种</th><th>班组</th><th>审批单据</th><th>进入时间</th><th>停留时长</th><th>作业与换气状态</th></tr></thead><tbody>'
-            + crew.map(function(w){
-                var mins = getStayMins(w.entryTs);
-                var isOver = !isYardWorkface && mins >= 120;
-                var trCls = (isIntrude || !w.hasApproval) ? ' class="intrude-row"' : (isOver ? ' class="timeout-row"' : '');
-                var permitCell = w.hasApproval
-                  ? '<span class="permit-chip ok">'+w.permitCode+'</span>'
-                  : '<span class="permit-chip bad">无审批单据</span>';
-                var statusCell = (isIntrude || !w.hasApproval)
-                  ? '<span class="permit-chip bad">⚠️ 未审批进入</span>'
-                  : (isOver ? '<span class="permit-chip warn">超2h换气提示</span>' : '<span class="permit-chip ok">正常在岗</span>');
-                return '<tr'+trCls+'><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.trade+'</td><td>'+w.team+'</td>'
-                  + '<td>'+permitCell+'</td>'
-                  + '<td class="c-time">'+fmtClock(w.entryTs)+'</td><td class="c-stay" data-entry="'+w.entryTs+'">'+fmtStay(w.entryTs)+'</td>'
-                  + '<td>'+statusCell+'</td></tr>';
-              }).join("")
-            + '</tbody></table>'
-          : '<div class="empty-note">当前空间内暂无在舱人员，可切换查看「历史进出与告警」。</div>';
-      } else {
-        if(subCtlEl){
-          if(state.timeMode !== "today"){
-            subCtlEl.innerHTML = '<div class="d-scope-group">'
-              + '<button type="button" class="d-scope-btn'+(state.histScope === "PERIOD" ? ' active' : '')+'" data-hscope="PERIOD">仅看'+getTimeLabel()+'</button>'
-              + '<button type="button" class="d-scope-btn'+(state.histScope === "ALL7" ? ' active' : '')+'" data-hscope="ALL7">近7日全部</button>'
-              + '</div>';
-            Array.prototype.forEach.call(subCtlEl.querySelectorAll("[data-hscope]"), function(btn){
-              btn.addEventListener("click", function(){
-                state.histScope = btn.getAttribute("data-hscope");
-                renderDetailBody();
-              });
-            });
-          } else {
-            subCtlEl.innerHTML = "";
-          }
+        document.getElementById("dCrewTitle").innerHTML = (isYard ? "当前在岗人员名单 · 共 " : "当前在舱人员名单 · 共 ") + crew.length + " 人" + titleExtra;
+        if(isYard){
+          crewWrapEl.innerHTML = crew.length
+            ? '<table class="crew-table"><thead><tr><th>工号</th><th>姓名</th><th>工种</th><th>班组</th><th>进入时间</th><th>停留时长</th><th>在岗状态</th></tr></thead><tbody>'
+              + crew.map(function(w){
+                  var trCls = isIntrude ? ' class="intrude-row"' : '';
+                  var statusCell = isIntrude ? '<span class="permit-chip bad">⚠️ 禁入闯入</span>' : '<span class="permit-chip ok">正常在岗</span>';
+                  return '<tr'+trCls+'><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.trade+'</td><td>'+w.team+'</td>'
+                    + '<td class="c-time">'+fmtClock(w.entryTs)+'</td><td class="c-stay" data-entry="'+w.entryTs+'">'+fmtStay(w.entryTs)+'</td>'
+                    + '<td>'+statusCell+'</td></tr>';
+                }).join("")
+              + '</tbody></table>'
+            : '<div class="empty-note">当前作业区域内暂无在岗人员。</div>';
+        } else {
+          crewWrapEl.innerHTML = crew.length
+            ? '<table class="crew-table"><thead><tr><th>工号</th><th>姓名</th><th>工种</th><th>班组</th><th>审批单据</th><th>进入时间</th><th>停留时长</th><th>作业状态</th></tr></thead><tbody>'
+              + crew.map(function(w){
+                  var mins = getStayMins(w.entryTs);
+                  var isOver = mins >= 120;
+                  var trCls = (isIntrude || !w.hasApproval) ? ' class="intrude-row"' : (isOver ? ' class="timeout-row"' : '');
+                  var permitCell = w.hasApproval
+                    ? '<span class="permit-chip ok">'+w.permitCode+'</span>'
+                    : '<span class="permit-chip bad">无审批单据</span>';
+                  var statusCell = (isIntrude || !w.hasApproval)
+                    ? '<span class="permit-chip bad">⚠️ 未审批进入</span>'
+                    : (isOver ? '<span class="permit-chip warn">⏱ 超 2 小时作业</span>' : '<span class="permit-chip ok">正常在岗</span>');
+                  return '<tr'+trCls+'><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.trade+'</td><td>'+w.team+'</td>'
+                    + '<td>'+permitCell+'</td>'
+                    + '<td class="c-time">'+fmtClock(w.entryTs)+'</td><td class="c-stay" data-entry="'+w.entryTs+'">'+fmtStay(w.entryTs)+'</td>'
+                    + '<td>'+statusCell+'</td></tr>';
+                }).join("")
+              + '</tbody></table>'
+            : '<div class="empty-note">当前空间内暂无在舱人员，可切换查看「今日历史进出与告警」。</div>';
         }
+      } else {
+        if(subCtlEl) subCtlEl.innerHTML = "";
         if(crewWrapEl) crewWrapEl.style.maxHeight = "210px";
-        document.getElementById("dCrewTitle").innerHTML = "进出历史明细（" + scopeLabel + "） · 共 " + hist.length + " 人次";
+        document.getElementById("dCrewTitle").innerHTML = scopeLabel + "进出历史明细 · 共 " + hist.length + " 人次";
         crewWrapEl.innerHTML = hist.length
           ? '<table class="crew-table"><thead><tr><th>日期</th><th>工号</th><th>姓名</th><th>工种/班组</th><th>审批单据</th><th>进舱时间</th><th>出舱时间</th><th>停留时长</th><th>进出状态</th></tr></thead><tbody>'
             + hist.map(function(r){
                 var trCls = !r.hasApproval ? ' class="intrude-row"' : (r.stayMins >= 120 ? ' class="timeout-row"' : '');
                 var pChip = r.hasApproval ? '<span class="permit-chip ok">'+r.permitCode+'</span>' : '<span class="permit-chip bad">无审批单据</span>';
                 var stChip = !r.hasApproval ? '<span class="permit-chip bad">⚠️ '+r.exitReason+'</span>'
-                  : (r.stayMins >= 120 ? '<span class="permit-chip warn">'+r.exitReason+'</span>' : '<span class="permit-chip ok">'+r.exitReason+'</span>');
+                  : (r.stayMins >= 120 ? '<span class="permit-chip warn">⏱ '+r.exitReason+'</span>' : '<span class="permit-chip ok">'+r.exitReason+'</span>');
                 return '<tr'+trCls+'><td class="c-time">'+r.dateStr+'</td><td class="c-id">'+r.id+'</td><td class="c-name">'+r.name+'</td>'
                   + '<td>'+r.trade+' · '+r.team+'</td><td>'+pChip+'</td>'
                   + '<td class="c-time">'+r.entryTimeStr+'</td><td class="c-time">'+r.exitTimeStr+'</td>'
                   + '<td class="c-stay">'+fmtStayMins(r.stayMins)+'</td><td>'+stChip+'</td></tr>';
               }).join("")
             + '</tbody></table>'
-          : '<div class="empty-note">该舱室在当前统计时段内暂无历史进出记录。</div>';
+          : '<div class="empty-note">该舱室今日暂无历史进出记录。</div>';
 
         if(alarmsSecEl){
           alarmsSecEl.style.display = "";
-          document.getElementById("dHistAlarmsTitle").innerHTML = "历史告警信息（" + scopeLabel + "） · 共 " + histAlarms.length + " 条";
+          document.getElementById("dHistAlarmsTitle").innerHTML = scopeLabel + "历史告警信息 · 共 " + histAlarms.length + " 条";
           var filtersEl = document.getElementById("dHistAlarmFilters");
           filtersEl.innerHTML =
             '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="ALL"?' active':'')+'" data-haf="ALL">全部 ('+histAlarms.length+')</button>'
             + '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="HIGH"?' active':'')+'" data-haf="HIGH">严重告警 ('+hdPeriod.highAlarms.length+')</button>'
-            + '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="WARN"?' active':'')+'" data-haf="WARN">换气/一般预警 ('+hdPeriod.warnAlarms.length+')</button>';
+            + '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="WARN"?' active':'')+'" data-haf="WARN">超时/一般预警 ('+hdPeriod.warnAlarms.length+')</button>';
           Array.prototype.forEach.call(filtersEl.querySelectorAll("[data-haf]"), function(btn){
             btn.addEventListener("click", function(){
               state.histAlarmFilter = btn.getAttribute("data-haf");
@@ -3113,19 +3135,21 @@
       document.getElementById("dTradeStats").innerHTML = crewStatRows(statsList, "trade", TRADE_COLORS);
       document.getElementById("dTeamStats").innerHTML = crewStatRows(statsList, "team", ["#3d9bff","#1fe08a","#ffb020","#b07dff","#2fd8c8"]);
       document.getElementById("dMeta").innerHTML =
-          '<span>空间工况类型<b>'+s.cabinStatus+'</b></span>'
-        + (state.detailTab === "hist"
-            ? ('<span>'+scopeLabel+'进出人次<b>'+hist.length+' 人</b></span>'
-              + '<span>'+scopeLabel+'历史告警<b style="color:'+(histAlarms.length ? '#ff96a8' : '#7dfcd0')+'">'+histAlarms.length+' 条</b></span>')
-            : ('<span>审批单据状态<b style="color:'+(s.hasApproval ? '#7dfcd0' : '#ff8296')+'">'+(s.hasApproval ? '审批有效' : '无有效审批单')+'</b></span>'
-              + '<span>作业票号<b class="mono">'+s.permit+'</b></span>'))
+          '<span>'+(isYard ? '区域工况状态' : '空间工况类型')+'<b>'+s.cabinStatus+'</b></span>'
+        + (!isYard
+            ? (state.detailTab === "hist"
+                ? ('<span>'+scopeLabel+'进出人次<b>'+hist.length+' 人</b></span>'
+                  + '<span>'+scopeLabel+'历史告警<b style="color:'+(histAlarms.length ? '#ff96a8' : '#7dfcd0')+'">'+histAlarms.length+' 条</b></span>')
+                : ('<span>审批单据状态<b style="color:'+(s.hasApproval ? '#7dfcd0' : '#ff8296')+'">'+(s.hasApproval ? '审批有效' : '无有效审批单')+'</b></span>'
+                  + '<span>作业票号<b class="mono">'+s.permit+'</b></span>'))
+            : '')
         + '<span>现场安全监护人<b>'+s.guardian+'</b></span>'
         + '<span>监护人电话<b class="mono">'+s.phone+'</b></span>'
         + '<span>定员限额<b>'+s.lim+' 人</b></span>';
     }
     function openDetail(i){
       state.detailIdx = i;
-      state.detailTab = (state.timeMode === "today") ? "cur" : "hist";
+      state.detailTab = (state.region === "yard" || state.timeMode === "today") ? "cur" : "hist";
       state.histAlarmFilter = "ALL";
       state.histScope = "PERIOD";
       var s = state.spaces[i];
@@ -3136,134 +3160,317 @@
       detailMask.classList.add("open");
     }
     document.getElementById("dTabCur").addEventListener("click", function(){ state.detailTab = "cur"; renderDetailBody(); });
-    document.getElementById("dTabHist").addEventListener("click", function(){ state.detailTab = "hist"; renderDetailBody(); });
+    document.getElementById("dTabHist").addEventListener("click", function(){ if(state.region === "yard") return; state.detailTab = "hist"; renderDetailBody(); });
 
     /* ---------------- 登船分类与历史统计综合下钻看板 (1.1 - 1.6) ---------------- */
     var analyticsMask = document.getElementById("analyticsMask");
-    function renderMiniBars(rows, colors){
-      var maxV = Math.max.apply(null, rows.map(function(r){ return r.total; }).concat([1]));
+    function renderMiniBars(rows, colors, isYard){
+      var maxV = Math.max.apply(null, rows.map(function(r){ return isYard ? r.current : r.total; }).concat([1]));
       return rows.map(function(r, i){
         var col = colors[i % colors.length];
+        var val = isYard ? r.current : r.total;
+        var tail = isYard
+          ? '<span class="t-pct" style="width:68px;color:#8ab4cf">在岗 '+r.current+' 人</span>'
+          : '<span class="t-pct" style="width:68px;color:#8ab4cf">在'+r.current+'/出'+r.exited+'</span>';
         return '<div class="trow" style="margin-bottom:6px">'
           + '<span class="t-name" style="width:108px" title="'+r.name+'">'+r.name+'</span>'
-          + '<div class="t-bar"><i style="width:'+Math.max(5, Math.round(r.total/maxV*100))+'%;background:linear-gradient(90deg, rgba(0,110,190,.45), '+col+')"></i></div>'
-          + '<span class="t-num" style="width:48px">'+r.total+'人</span>'
-          + '<span class="t-pct" style="width:68px;color:#8ab4cf">在'+r.current+'/出'+r.exited+'</span>'
+          + '<div class="t-bar"><i style="width:'+Math.max(5, Math.round(val/maxV*100))+'%;background:linear-gradient(90deg, rgba(0,110,190,.45), '+col+')"></i></div>'
+          + '<span class="t-num" style="width:48px">'+val+'人</span>'
+          + tail
           + '</div>';
       }).join("");
     }
-    function openAnalyticsModal(tab){
+    function openAnalyticsModal(tab, opts){
       state.analyticsTab = tab || "boarded";
+      if(opts){
+        if(tab === "boarded") state.boardedFilter = opts.filter || "ALL";
+        if(tab === "engine") state.engineFilter = opts.filter || "ALL";
+        if(tab === "confined"){
+          if(opts.viewMode) state.confViewMode = opts.viewMode;
+          if(state.confViewMode === "crew") state.confCrewFilter = opts.filter || "ALL";
+          else state.confFilter = opts.filter || "ALL";
+        }
+      } else {
+        state.boardedFilter = "ALL";
+        state.engineFilter = "ALL";
+        state.confViewMode = "spaces";
+        state.confCrewFilter = "ALL";
+        state.confFilter = "ALL";
+      }
+      if(state.region === "yard" && state.confFilter === "UNAPPROVED") state.confFilter = "ALL";
       renderAnalyticsContent();
       analyticsMask.classList.add("open");
     }
     function renderAnalyticsContent(){
       var snap = computeSnapshot();
+      var isYard = snap.isYard;
       var timeDesc = state.timeMode === "today" ? "今日实时 (" + getTodayStr() + ")"
         : (state.timeMode === "yesterday" ? "昨日历史 (" + getYesterdayStr() + ")"
         : (state.timeMode === "dayBefore" ? "前天历史 (" + getDayBeforeStr() + ")" : "历史日期 (" + state.customDate + ")"));
       document.getElementById("anTitle").textContent = getProjName(state.proj) + " · " + timeDesc + " 安全统计分析";
-      Array.prototype.forEach.call(document.querySelectorAll("#anTabs .an-tab"), function(t){
+      var tabBtns = document.querySelectorAll("#anTabs .an-tab");
+      if(tabBtns[0]) tabBtns[0].textContent = isYard ? "1. 在岗人员与分类统计 (班组/工种)" : "1. 登船人员与分类统计 (班组/工种)";
+      if(tabBtns[1]) tabBtns[1].textContent = isYard ? "2. 重点工区在岗人员明细" : "2. 机舱人员进出统计";
+      if(tabBtns[2]) tabBtns[2].textContent = isYard ? "3. 作业区域开工清单" : "3. 有限空间进出与作业清单";
+      Array.prototype.forEach.call(tabBtns, function(t){
         t.classList.toggle("active", t.getAttribute("data-antab") === state.analyticsTab);
       });
 
       var el = document.getElementById("anContent");
       if(state.analyticsTab === "boarded"){
-        var html = '<div class="an-kpi-row">'
-          + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'施工总人数</span><span class="ak-val c">'+snap.boardedTotal+' 人</span><span class="ak-sub">当前在场 + 已离开合计</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">当前在场人数</span><span class="ak-val g">'+snap.onboardCurrent+' 人</span><span class="ak-sub">实时定位在场受控人员</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">已下船/已离开人数</span><span class="ak-val o">'+snap.disembarkedCount+' 人</span><span class="ak-sub">已完成班次签退离开</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">作业班组与工种覆盖</span><span class="ak-val">'+snap.byTeam.filter(function(x){return x.total>0;}).length+' 班组</span><span class="ak-sub">覆盖 '+snap.byTrade.filter(function(x){return x.total>0;}).length+' 个作业工种</span></div>'
-          + '</div>';
-        html += '<div class="an-2col">'
-          + '<div class="an-card"><h5><span>按施工班组统计</span><span>合计 '+snap.boardedTotal+' 人</span></h5>'+renderMiniBars(snap.byTeam, TEAM_COLORS)+'</div>'
-          + '<div class="an-card"><h5><span>按作业工种统计</span><span>合计 '+snap.boardedTotal+' 人</span></h5>'+renderMiniBars(snap.byTrade, TRADE_COLORS)+'</div>'
-          + '</div>';
-        html += '<div class="crew-wrap" style="max-height:260px"><table class="crew-table"><thead><tr>'
-          + '<th>工号</th><th>姓名</th><th>施工班组</th><th>工种</th><th>所在/作业空间</th><th>进船/入舱时间</th><th>离开时间</th><th>当前状态</th>'
-          + '</tr></thead><tbody>'
-          + snap.boardedWorkers.slice(0, 80).map(function(w){
-              var stBadge = w.isCurrentlyOnboard ? '<span class="permit-chip ok">当前在岗</span>' : '<span class="permit-chip warn">已离开</span>';
-              return '<tr><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.team+'</td><td>'+w.trade+'</td>'
-                + '<td>'+w.spaceName+'</td><td class="c-time">'+w.entryTimeStr+'</td><td class="c-time">'+w.exitTimeStr+'</td><td>'+stBadge+'</td></tr>';
-            }).join("")
-          + '</tbody></table></div>';
-        el.innerHTML = html;
-      } else if(state.analyticsTab === "engine"){
-        var erHtml = '<div class="an-kpi-row">'
-          + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'下机舱人员总量</span><span class="ak-val o">'+snap.erTotal+' 人</span><span class="ak-sub">含当前在机舱与已出机舱</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">当前在机舱内人数</span><span class="ak-val g">'+snap.erCurrent+' 人</span><span class="ak-sub">实时机舱区域在岗人员</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">上过船已出机舱人数</span><span class="ak-val c">'+snap.erExited+' 人</span><span class="ak-sub">下机舱作业后已安全返回</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">占总人数比例</span><span class="ak-val">'+(snap.boardedTotal ? Math.round(snap.erTotal/snap.boardedTotal*100) : 0)+'%</span><span class="ak-sub">机舱集中作业负荷占比</span></div>'
-          + '</div>';
-        erHtml += '<div class="crew-wrap" style="max-height:380px"><table class="crew-table"><thead><tr>'
-          + '<th>工号</th><th>姓名</th><th>班组 / 工种</th><th>机舱作业点位</th><th>进入机舱时间</th><th>离开机舱时间</th><th>状态</th>'
-          + '</tr></thead><tbody>'
-          + (snap.erWorkers.length ? snap.erWorkers.map(function(w){
-              var badge = w.isCurrentlyInER ? '<span class="permit-chip ok">当前在机舱</span>' : '<span class="permit-chip warn">已出机舱</span>';
-              return '<tr><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.team+' · '+w.trade+'</td>'
-                + '<td>'+w.spaceName+'</td><td class="c-time">'+w.entryTimeStr+'</td><td class="c-time">'+w.exitTimeStr+'</td><td>'+badge+'</td></tr>';
-            }).join("") : '<tr><td colspan="7" class="empty-note">当前选择时间范围内暂无机舱作业人员记录。</td></tr>')
-          + '</tbody></table></div>';
-        el.innerHTML = erHtml;
-      } else {
-        var cSpaces = snap.confSpaces;
-        var workedSet = {};
-        snap.workedConfSpaces.forEach(function(ws){ workedSet[(ws.deptName || "") + "::" + ws.name] = true; });
-        var unappSpaceCount = cSpaces.filter(function(s){ return s.unapprovedCurrent || s.unapprovedHistoryCount > 0; }).length;
-        var activeConfCount = countEntered(cSpaces);
-        var filteredSpaces = cSpaces.filter(function(s){
-          if(state.confFilter === "WORKED") return !!workedSet[(s.deptName || "") + "::" + s.name];
-          if(state.confFilter === "UNAPPROVED") return !!(s.unapprovedCurrent || s.unapprovedHistoryCount > 0);
-          return true;
-        });
-
-        var cHtml = '<div class="an-kpi-row">'
-          + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'出入有限空间总人数</span><span class="ak-val c">'+snap.confTotal+' 人</span><span class="ak-sub">当前在舱 <b>'+snap.confCurrent+'</b> 人 · 进入过(已出) <b>'+snap.confExited+'</b> 人</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'有作业过的有限空间</span><span class="ak-val g">'+snap.workedConfCount+' / '+snap.totalConfCount+' 舱</span><span class="ak-sub">含当前在舱及早班已完工舱室</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">当前有人作业有限空间</span><span class="ak-val o">'+activeConfCount+' / '+snap.totalConfCount+' 舱</span><span class="ak-sub">实时有人在舱作业舱室数</span></div>'
-          + '<div class="an-kpi"><span class="ak-lab">未审批进入预警舱室</span><span class="ak-val r">'+unappSpaceCount+' 处</span><span class="ak-sub">实时拦截或历史无审批单进入</span></div>'
-          + '</div>';
-        cHtml += '<div class="an-filter-bar">'
-          + '<button type="button" class="an-filter-btn'+(state.confFilter==="ALL"?" active":"")+'" data-cfilter="ALL">全部有限空间 ('+cSpaces.length+')</button>'
-          + '<button type="button" class="an-filter-btn'+(state.confFilter==="WORKED"?" active":"")+'" data-cfilter="WORKED">'+snap.timeLabel+'作业过 ('+snap.workedConfCount+')</button>'
-          + '<button type="button" class="an-filter-btn'+(state.confFilter==="UNAPPROVED"?" active":"")+'" data-cfilter="UNAPPROVED">无审批进入警示 ('+unappSpaceCount+')</button>'
-          + '</div>';
-        cHtml += '<div class="crew-wrap" style="max-height:340px"><table class="crew-table"><thead><tr>'
-          + '<th>舱室名称</th><th>舱室状态</th><th>'+snap.timeLabel+'是否作业</th><th>当前在舱</th><th>审批与换气提醒</th><th>监护人</th>'
-          + '</tr></thead><tbody>'
-          + filteredSpaces.map(function(s){
-              var sKey = (s.deptName || "") + "::" + s.name;
-              var hasWorked = !!workedSet[sKey];
-              var over2h = getOver2hCrew(s);
-              var workTxt = hasWorked ? '<span style="color:#1fe08a;font-weight:700">✓ 已作业</span>' : '<span style="color:#6f9dbd">未作业</span>';
-              var warnCell = s.unapprovedCurrent ? '<span class="permit-chip bad">⚠️ 当前未审批进入</span>'
-                : (s.unapprovedHistoryCount > 0 ? '<span class="permit-chip bad">历史曾无审批进入</span>'
-                : (over2h.length > 0 ? '<span class="permit-chip warn">💨 超2h换气提示</span>' : '<span class="permit-chip ok">合规正常</span>'));
-              return '<tr style="cursor:pointer" data-cspace="'+sKey+'"><td class="c-name">'+s.name+'</td><td>'+s.cabinStatus+'</td>'
-                + '<td>'+workTxt+'</td><td class="c-stay">'+s.entered+' / '+s.lim+' 人</td><td>'+warnCell+'</td><td>'+s.guardian+'</td></tr>';
-            }).join("")
-          + '</tbody></table></div>';
-        el.innerHTML = cHtml;
-        Array.prototype.forEach.call(el.querySelectorAll("[data-cfilter]"), function(b){
-          b.addEventListener("click", function(){ state.confFilter = b.getAttribute("data-cfilter"); renderAnalyticsContent(); });
-        });
-        Array.prototype.forEach.call(el.querySelectorAll("[data-cspace]"), function(tr){
-          tr.addEventListener("click", function(){
-            var targetKey = tr.getAttribute("data-cspace");
-            state.mode = "confined";
-            state.spaces = sortSpaces(state.sets.confined);
-            applyProjectUI(); renderCards();
-            for(var idx=0; idx<state.spaces.length; idx++){
-              var spKey = (state.spaces[idx].deptName || "") + "::" + state.spaces[idx].name;
-              if(spKey === targetKey){
-                analyticsMask.classList.remove("open");
-                openDetail(idx);
-                break;
-              }
-            }
+        if(isYard){
+          var curWorkers = snap.boardedWorkers.filter(function(w){ return w.isCurrentlyOnboard; });
+          var html = '<div class="an-kpi-row" style="grid-template-columns:repeat(3,minmax(0,1fr))">'
+            + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'出勤总人数</span><span class="ak-val c">'+snap.boardedTotal+' 人</span><span class="ak-sub">今日累计入厂作业人数</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">当前在岗人数</span><span class="ak-val g">'+snap.onboardCurrent+' 人</span><span class="ak-sub">实时定位在岗受控人员</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">作业班组与工种覆盖</span><span class="ak-val">'+snap.byTeam.filter(function(x){return x.current>0;}).length+' 班组</span><span class="ak-sub">覆盖 '+snap.byTrade.filter(function(x){return x.current>0;}).length+' 个作业工种</span></div>'
+            + '</div>';
+          html += '<div class="an-2col">'
+            + '<div class="an-card"><h5><span>按施工班组统计（当前在岗）</span><span>合计 '+snap.onboardCurrent+' 人</span></h5>'+renderMiniBars(snap.byTeam, TEAM_COLORS, true)+'</div>'
+            + '<div class="an-card"><h5><span>按作业工种统计（当前在岗）</span><span>合计 '+snap.onboardCurrent+' 人</span></h5>'+renderMiniBars(snap.byTrade, TRADE_COLORS, true)+'</div>'
+            + '</div>';
+          html += '<div class="crew-wrap" style="max-height:260px"><table class="crew-table"><thead><tr>'
+            + '<th>工号</th><th>姓名</th><th>施工班组</th><th>工种</th><th>所在作业区域</th><th>进入时间</th><th>当前状态</th>'
+            + '</tr></thead><tbody>'
+            + (curWorkers.length ? curWorkers.map(function(w){
+                return '<tr><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.team+'</td><td>'+w.trade+'</td>'
+                  + '<td>'+w.spaceName+'</td><td class="c-time">'+w.entryTimeStr+'</td><td><span class="permit-chip ok">当前在岗</span></td></tr>';
+              }).join("") : '<tr><td colspan="7" class="empty-note">当前暂无在岗人员。</td></tr>')
+            + '</tbody></table></div>';
+          el.innerHTML = html;
+        } else {
+          var filteredBoarded = snap.boardedWorkers.filter(function(w){
+            if(state.boardedFilter === "CUR") return w.isCurrentlyOnboard;
+            if(state.boardedFilter === "EXITED") return !w.isCurrentlyOnboard;
+            return true;
           });
-        });
+          var html = '<div class="an-kpi-row">'
+            + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'施工总人数</span><span class="ak-val c">'+snap.boardedTotal+' 人</span><span class="ak-sub">当前在船 + 已下船合计</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">当前在船人数</span><span class="ak-val g">'+snap.onboardCurrent+' 人</span><span class="ak-sub">实时定位在船受控人员</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">已下船人数</span><span class="ak-val o">'+snap.disembarkedCount+' 人</span><span class="ak-sub">已完成班次签退下船</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">作业班组与工种覆盖</span><span class="ak-val">'+snap.byTeam.filter(function(x){return x.total>0;}).length+' 班组</span><span class="ak-sub">覆盖 '+snap.byTrade.filter(function(x){return x.total>0;}).length+' 个作业工种</span></div>'
+            + '</div>';
+          html += '<div class="an-2col">'
+            + '<div class="an-card"><h5><span>按施工班组统计</span><span>合计 '+snap.boardedTotal+' 人</span></h5>'+renderMiniBars(snap.byTeam, TEAM_COLORS, false)+'</div>'
+            + '<div class="an-card"><h5><span>按作业工种统计</span><span>合计 '+snap.boardedTotal+' 人</span></h5>'+renderMiniBars(snap.byTrade, TRADE_COLORS, false)+'</div>'
+            + '</div>';
+          html += '<div class="an-filter-bar">'
+            + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="ALL"?" active":"")+'" data-bfilter="ALL">全部登船人员 ('+snap.boardedTotal+')</button>'
+            + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="CUR"?" active":"")+'" data-bfilter="CUR">当前在船 ('+snap.onboardCurrent+')</button>'
+            + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="EXITED"?" active":"")+'" data-bfilter="EXITED">已下船明细 ('+snap.disembarkedCount+')</button>'
+            + '</div>';
+          html += '<div class="crew-wrap" style="max-height:260px"><table class="crew-table"><thead><tr>'
+            + '<th>工号</th><th>姓名</th><th>施工班组</th><th>工种</th><th>所在/作业空间</th><th>进船/入舱时间</th><th>下船/离开时间</th><th>当前状态</th>'
+            + '</tr></thead><tbody>'
+            + (filteredBoarded.length ? filteredBoarded.map(function(w){
+                var stBadge = w.isCurrentlyOnboard ? '<span class="permit-chip ok">当前在船</span>' : '<span class="permit-chip warn">已下船</span>';
+                return '<tr><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.team+'</td><td>'+w.trade+'</td>'
+                  + '<td>'+w.spaceName+'</td><td class="c-time">'+w.entryTimeStr+'</td><td class="c-time">'+w.exitTimeStr+'</td><td>'+stBadge+'</td></tr>';
+              }).join("") : '<tr><td colspan="8" class="empty-note">当前筛选条件下暂无登船人员记录。</td></tr>')
+            + '</tbody></table></div>';
+          el.innerHTML = html;
+          Array.prototype.forEach.call(el.querySelectorAll("[data-bfilter]"), function(b){
+            b.addEventListener("click", function(){ state.boardedFilter = b.getAttribute("data-bfilter"); renderAnalyticsContent(); });
+          });
+        }
+      } else if(state.analyticsTab === "engine"){
+        if(isYard){
+          var curErWorkers = snap.erWorkers.filter(function(w){ return w.isCurrentlyInER; });
+          var erHtml = '<div class="an-kpi-row" style="grid-template-columns:repeat(3,minmax(0,1fr))">'
+            + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'重点工区作业总人数</span><span class="ak-val o">'+(snap.erTotal || Math.round(snap.boardedTotal * 0.28))+' 人</span><span class="ak-sub">今日重点动火作业人员累计</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">当前在岗人数</span><span class="ak-val g">'+snap.erCurrent+' 人</span><span class="ak-sub">实时重点工区在岗人员</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">占出勤人数比例</span><span class="ak-val">'+(snap.boardedTotal ? Math.round(snap.erCurrent/snap.boardedTotal*100) : 0)+'%</span><span class="ak-sub">当前重点工区集中负荷占比</span></div>'
+            + '</div>';
+          erHtml += '<div class="crew-wrap" style="max-height:380px"><table class="crew-table"><thead><tr>'
+            + '<th>工号</th><th>姓名</th><th>班组 / 工种</th><th>重点作业点位</th><th>进入时间</th><th>在岗状态</th>'
+            + '</tr></thead><tbody>'
+            + (curErWorkers.length ? curErWorkers.map(function(w){
+                return '<tr><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.team+' · '+w.trade+'</td>'
+                  + '<td>'+w.spaceName+'</td><td class="c-time">'+w.entryTimeStr+'</td><td><span class="permit-chip ok">当前在岗</span></td></tr>';
+              }).join("") : '<tr><td colspan="6" class="empty-note">当前重点工区暂无在岗人员。</td></tr>')
+            + '</tbody></table></div>';
+          el.innerHTML = erHtml;
+        } else {
+          var filteredEr = snap.erWorkers.filter(function(w){
+            if(state.engineFilter === "CUR") return w.isCurrentlyInER;
+            if(state.engineFilter === "EXITED") return !w.isCurrentlyInER;
+            return true;
+          });
+          var erHtml = '<div class="an-kpi-row">'
+            + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'下机舱人员总量</span><span class="ak-val o">'+snap.erTotal+' 人</span><span class="ak-sub">含当前在机舱与已出机舱</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">当前在机舱内人数</span><span class="ak-val g">'+snap.erCurrent+' 人</span><span class="ak-sub">实时机舱区域在岗人员</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">已出机舱人数</span><span class="ak-val c">'+snap.erExited+' 人</span><span class="ak-sub">下机舱作业后已安全出舱</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">占总人数比例</span><span class="ak-val">'+(snap.boardedTotal ? Math.round(snap.erTotal/snap.boardedTotal*100) : 0)+'%</span><span class="ak-sub">机舱集中作业负荷占比</span></div>'
+            + '</div>';
+          erHtml += '<div class="an-filter-bar">'
+            + '<button type="button" class="an-filter-btn'+(state.engineFilter==="ALL"?" active":"")+'" data-efilter="ALL">全部机舱人员 ('+snap.erTotal+')</button>'
+            + '<button type="button" class="an-filter-btn'+(state.engineFilter==="CUR"?" active":"")+'" data-efilter="CUR">当前在机舱 ('+snap.erCurrent+')</button>'
+            + '<button type="button" class="an-filter-btn'+(state.engineFilter==="EXITED"?" active":"")+'" data-efilter="EXITED">已出机舱明细 ('+snap.erExited+')</button>'
+            + '</div>';
+          erHtml += '<div class="crew-wrap" style="max-height:360px"><table class="crew-table"><thead><tr>'
+            + '<th>工号</th><th>姓名</th><th>班组 / 工种</th><th>机舱作业点位</th><th>进入机舱时间</th><th>离开机舱时间</th><th>状态</th>'
+            + '</tr></thead><tbody>'
+            + (filteredEr.length ? filteredEr.map(function(w){
+                var badge = w.isCurrentlyInER ? '<span class="permit-chip ok">当前在机舱</span>' : '<span class="permit-chip warn">已出机舱</span>';
+                return '<tr><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.team+' · '+w.trade+'</td>'
+                  + '<td>'+w.spaceName+'</td><td class="c-time">'+w.entryTimeStr+'</td><td class="c-time">'+w.exitTimeStr+'</td><td>'+badge+'</td></tr>';
+              }).join("") : '<tr><td colspan="7" class="empty-note">当前筛选条件下暂无机舱作业人员记录。</td></tr>')
+            + '</tbody></table></div>';
+          el.innerHTML = erHtml;
+          Array.prototype.forEach.call(el.querySelectorAll("[data-efilter]"), function(b){
+            b.addEventListener("click", function(){ state.engineFilter = b.getAttribute("data-efilter"); renderAnalyticsContent(); });
+          });
+        }
+      } else {
+        if(isYard){
+          var wfSpaces = snap.wfSpaces || [];
+          var wfActiveSpaces = wfSpaces.filter(function(s){ return s.entered > 0; });
+          var wfPplTotal = sumEntered(wfSpaces);
+          var wfFiltered = state.confFilter === "WORKED" ? wfActiveSpaces : wfSpaces;
+          var wHtml = '<div class="an-kpi-row" style="grid-template-columns:repeat(2,minmax(0,1fr))">'
+            + '<div class="an-kpi"><span class="ak-lab">当前作业面在岗人数</span><span class="ak-val c">'+wfPplTotal+' 人</span><span class="ak-sub">各厂区作业面实时在岗人数</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">当前开工区域数/总数</span><span class="ak-val g">'+wfActiveSpaces.length+' / '+wfSpaces.length+' 处</span><span class="ak-sub">实时有人作业区域统计</span></div>'
+            + '</div>';
+          wHtml += '<div class="an-filter-bar">'
+            + '<button type="button" class="an-filter-btn'+(state.confFilter==="ALL"?" active":"")+'" data-cfilter="ALL">全部作业区域 ('+wfSpaces.length+')</button>'
+            + '<button type="button" class="an-filter-btn'+(state.confFilter==="WORKED"?" active":"")+'" data-cfilter="WORKED">当前在岗开工 ('+wfActiveSpaces.length+')</button>'
+            + '</div>';
+          wHtml += '<div class="crew-wrap" style="max-height:340px"><table class="crew-table"><thead><tr>'
+            + '<th>作业区域名称</th><th>区域状态</th><th>当前在岗</th><th>状态说明</th><th>安全监护人</th>'
+            + '</tr></thead><tbody>'
+            + wfFiltered.map(function(s){
+                var sKey = (s.deptName || "") + "::" + s.name;
+                var stTxt = s.forbid && s.entered > 0
+                  ? '<span class="permit-chip bad">⚠️ 禁入闯入</span>'
+                  : (s.entered > 0 ? '<span class="permit-chip ok">正常作业中</span>' : '<span class="permit-chip" style="color:#8ab4cf;border-color:rgba(125,150,180,.3)">无人状态</span>');
+                return '<tr style="cursor:pointer" data-cspace="'+sKey+'"><td class="c-name">'+s.name+'</td><td>'+s.cabinStatus+'</td>'
+                  + '<td class="c-stay">'+s.entered+' / '+s.lim+' 人</td><td>'+stTxt+'</td><td>'+s.guardian+'</td></tr>';
+              }).join("")
+            + '</tbody></table></div>';
+          el.innerHTML = wHtml;
+          Array.prototype.forEach.call(el.querySelectorAll("[data-cfilter]"), function(b){
+            b.addEventListener("click", function(){ state.confFilter = b.getAttribute("data-cfilter"); renderAnalyticsContent(); });
+          });
+          Array.prototype.forEach.call(el.querySelectorAll("[data-cspace]"), function(tr){
+            tr.addEventListener("click", function(){
+              var targetKey = tr.getAttribute("data-cspace");
+              state.mode = "workface";
+              state.spaces = sortSpaces(state.sets.workface);
+              applyProjectUI(); renderCards();
+              for(var idx=0; idx<state.spaces.length; idx++){
+                var spKey = (state.spaces[idx].deptName || "") + "::" + state.spaces[idx].name;
+                if(spKey === targetKey){
+                  analyticsMask.classList.remove("open");
+                  openDetail(idx);
+                  break;
+                }
+              }
+            });
+          });
+        } else {
+          var cSpaces = snap.confSpaces;
+          var workedSet = {};
+          snap.workedConfSpaces.forEach(function(ws){ workedSet[(ws.deptName || "") + "::" + ws.name] = true; });
+          var unappSpaceCount = cSpaces.filter(function(s){ return s.unapprovedCurrent || s.unapprovedHistoryCount > 0; }).length;
+          var activeConfCount = countEntered(cSpaces);
+          var todayEntryBySpace = {};
+          snap.confWorkers.forEach(function(w){
+            todayEntryBySpace[w.spaceName] = (todayEntryBySpace[w.spaceName] || 0) + 1;
+          });
+
+          var cHtml = '<div class="an-kpi-row">'
+            + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'出入有限空间总人数（总进舱）</span><span class="ak-val c">'+snap.confTotal+' 人</span><span class="ak-sub">当前在舱 <b>'+snap.confCurrent+'</b> 人 · 进入过(已出) <b>'+snap.confExited+'</b> 人</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'有作业过的有限空间</span><span class="ak-val g">'+snap.workedConfCount+' / '+snap.totalConfCount+' 舱</span><span class="ak-sub">含当前在舱及今日已出舱室</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">当前有人作业有限空间</span><span class="ak-val o">'+activeConfCount+' / '+snap.totalConfCount+' 舱</span><span class="ak-sub">实时有人在舱作业舱室数</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">未审批进入预警舱室</span><span class="ak-val r">'+unappSpaceCount+' 处</span><span class="ak-sub">实时拦截或历史无审批单进入</span></div>'
+            + '</div>';
+
+          cHtml += '<div class="an-filter-bar" style="justify-content:space-between;padding-bottom:6px;border-bottom:1px dashed rgba(0,180,240,.22);margin-bottom:10px">'
+            + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+            + '<button type="button" class="an-filter-btn'+(state.confViewMode==="spaces"?" active":"")+'" data-cview="spaces">舱室清单（'+cSpaces.length+' 舱）</button>'
+            + '<button type="button" class="an-filter-btn'+(state.confViewMode==="crew"?" active":"")+'" data-cview="crew">总进舱人员明细（'+snap.confTotal+' 人 · 当前在舱 '+snap.confCurrent+' / 进入过(已出) '+snap.confExited+'）</button>'
+            + '</div></div>';
+
+          if(state.confViewMode === "crew"){
+            var filteredConfCrew = snap.confWorkers.filter(function(w){
+              if(state.confCrewFilter === "CUR") return w.isCurrentlyInConfined;
+              if(state.confCrewFilter === "EXITED") return !w.isCurrentlyInConfined;
+              return true;
+            });
+            cHtml += '<div class="an-filter-bar">'
+              + '<button type="button" class="an-filter-btn'+(state.confCrewFilter==="ALL"?" active":"")+'" data-ccfilter="ALL">总进舱人员 ('+snap.confTotal+')</button>'
+              + '<button type="button" class="an-filter-btn'+(state.confCrewFilter==="CUR"?" active":"")+'" data-ccfilter="CUR">当前在舱 ('+snap.confCurrent+')</button>'
+              + '<button type="button" class="an-filter-btn'+(state.confCrewFilter==="EXITED"?" active":"")+'" data-ccfilter="EXITED">进入过(已出) ('+snap.confExited+')</button>'
+              + '</div>';
+            cHtml += '<div class="crew-wrap" style="max-height:310px"><table class="crew-table"><thead><tr>'
+              + '<th>工号</th><th>姓名</th><th>班组 / 工种</th><th>有限空间舱室</th><th>进舱时间</th><th>出舱时间</th><th>停留时长</th><th>状态</th>'
+              + '</tr></thead><tbody>'
+              + (filteredConfCrew.length ? filteredConfCrew.map(function(w){
+                  var stChip = w.isCurrentlyInConfined
+                    ? '<span class="permit-chip ok">当前在舱</span>'
+                    : '<span class="permit-chip warn">进入过(已出)</span>';
+                  return '<tr><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.team+' · '+w.trade+'</td>'
+                    + '<td>'+w.spaceName+'</td><td class="c-time">'+w.entryTimeStr+'</td><td class="c-time">'+w.exitTimeStr+'</td>'
+                    + '<td class="c-stay">'+fmtStayMins(w.stayMins)+'</td><td>'+stChip+'</td></tr>';
+                }).join("") : '<tr><td colspan="8" class="empty-note">当前筛选条件下暂无有限空间进出人员记录。</td></tr>')
+              + '</tbody></table></div>';
+          } else {
+            var filteredSpaces = cSpaces.filter(function(s){
+              if(state.confFilter === "WORKED") return !!workedSet[(s.deptName || "") + "::" + s.name];
+              if(state.confFilter === "ACTIVE") return s.entered > 0;
+              if(state.confFilter === "UNAPPROVED") return !!(s.unapprovedCurrent || s.unapprovedHistoryCount > 0);
+              return true;
+            });
+            cHtml += '<div class="an-filter-bar">'
+              + '<button type="button" class="an-filter-btn'+(state.confFilter==="ALL"?" active":"")+'" data-cfilter="ALL">全部有限空间 ('+cSpaces.length+')</button>'
+              + '<button type="button" class="an-filter-btn'+(state.confFilter==="WORKED"?" active":"")+'" data-cfilter="WORKED">'+snap.timeLabel+'进舱作业过 ('+snap.workedConfCount+')</button>'
+              + '<button type="button" class="an-filter-btn'+(state.confFilter==="ACTIVE"?" active":"")+'" data-cfilter="ACTIVE">当前有人在舱 ('+activeConfCount+')</button>'
+              + '<button type="button" class="an-filter-btn'+(state.confFilter==="UNAPPROVED"?" active":"")+'" data-cfilter="UNAPPROVED">无审批进入警示 ('+unappSpaceCount+')</button>'
+              + '</div>';
+            cHtml += '<div class="crew-wrap" style="max-height:310px"><table class="crew-table"><thead><tr>'
+              + '<th>舱室名称</th><th>舱室状态</th><th>'+snap.timeLabel+'是否作业</th><th>当前在舱</th><th>总进舱人次</th><th>审批与作业提醒</th><th>监护人</th>'
+              + '</tr></thead><tbody>'
+              + (filteredSpaces.length ? filteredSpaces.map(function(s){
+                  var sKey = (s.deptName || "") + "::" + s.name;
+                  var hasWorked = !!workedSet[sKey];
+                  var over2h = getOver2hCrew(s);
+                  var totalEntries = todayEntryBySpace[s.name] || s.entered;
+                  var workTxt = hasWorked ? '<span style="color:#1fe08a;font-weight:700">✓ 已作业</span>' : '<span style="color:#6f9dbd">未作业</span>';
+                  var warnCell = s.unapprovedCurrent ? '<span class="permit-chip bad">⚠️ 当前未审批进入</span>'
+                    : (s.unapprovedHistoryCount > 0 ? '<span class="permit-chip bad">历史曾无审批进入</span>'
+                    : (over2h.length > 0 ? '<span class="permit-chip warn">⏱ 超 2 小时作业</span>' : '<span class="permit-chip ok">合规正常</span>'));
+                  return '<tr style="cursor:pointer" data-cspace="'+sKey+'"><td class="c-name">'+s.name+'</td><td>'+s.cabinStatus+'</td>'
+                    + '<td>'+workTxt+'</td><td class="c-stay">'+s.entered+' / '+s.lim+' 人</td><td class="c-stay">'+totalEntries+' 人次</td><td>'+warnCell+'</td><td>'+s.guardian+'</td></tr>';
+                }).join("") : '<tr><td colspan="7" class="empty-note">当前筛选条件下暂无舱室数据。</td></tr>')
+              + '</tbody></table></div>';
+          }
+          el.innerHTML = cHtml;
+          Array.prototype.forEach.call(el.querySelectorAll("[data-cview]"), function(b){
+            b.addEventListener("click", function(){ state.confViewMode = b.getAttribute("data-cview"); renderAnalyticsContent(); });
+          });
+          Array.prototype.forEach.call(el.querySelectorAll("[data-ccfilter]"), function(b){
+            b.addEventListener("click", function(){ state.confCrewFilter = b.getAttribute("data-ccfilter"); renderAnalyticsContent(); });
+          });
+          Array.prototype.forEach.call(el.querySelectorAll("[data-cfilter]"), function(b){
+            b.addEventListener("click", function(){ state.confFilter = b.getAttribute("data-cfilter"); renderAnalyticsContent(); });
+          });
+          Array.prototype.forEach.call(el.querySelectorAll("[data-cspace]"), function(tr){
+            tr.addEventListener("click", function(){
+              var targetKey = tr.getAttribute("data-cspace");
+              state.mode = "confined";
+              state.spaces = sortSpaces(state.sets.confined);
+              applyProjectUI(); renderCards();
+              for(var idx=0; idx<state.spaces.length; idx++){
+                var spKey = (state.spaces[idx].deptName || "") + "::" + state.spaces[idx].name;
+                if(spKey === targetKey){
+                  analyticsMask.classList.remove("open");
+                  openDetail(idx);
+                  break;
+                }
+              }
+            });
+          });
+        }
       }
     }
     Array.prototype.forEach.call(document.querySelectorAll("#anTabs .an-tab"), function(t){

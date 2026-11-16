@@ -325,7 +325,7 @@ export const INITIAL_ALARM_RULES: AlarmRuleItem[] = [
       { type: '主基站', relation: '是', target: '1号码头主基站 (BS-01)' }
     ],
     personConditions: [
-      { scope: '工种类别', relation: '不是', target: '起重挂钩工' }
+      { scope: '工种类别', relation: '包含', target: '起重挂钩工' }
     ],
     conditionType: '告警时段',
     conditionOperator: '00:00 ~ 23:59',
@@ -360,7 +360,7 @@ export const INITIAL_ALARM_RULES: AlarmRuleItem[] = [
             { type: '主基站', relation: '是', target: '1号码头主基站 (BS-01)' }
           ],
           personConditions: [
-            { scope: '工种类别', relation: '不是', target: '起重挂钩工' }
+            { scope: '工种类别', relation: '包含', target: '起重挂钩工' }
           ],
           conditionType: '告警时段',
           conditionOperator: '00:00 ~ 23:59',

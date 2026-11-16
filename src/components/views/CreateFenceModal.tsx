@@ -17,31 +17,13 @@ import {
   Sparkles,
   Link,
   ShieldCheck,
-  MapPin
+  MapPin,
+  Users,
+  Minus
 } from 'lucide-react';
+import type { FenceData } from '@/src/data/fenceStorage';
 
-export interface FenceData {
-  id: string;
-  code: string;
-  name: string;
-  scopeType: 'yard' | 'project'; // 归属范围：厂区公共 vs 项目工程
-  yardArea?: string; // 厂区功能分区
-  projectId?: string; // 关联造船项目ID (选择关联船舶项目时必填)
-  projectName: string; // 显示名称
-  projectPhase?: string; // 关联工程阶段 (选择关联船舶项目时必填)
-  projectSection?: string; // 关联船体舱段/部位 (选择关联船舶项目时必填)
-  modelLevel?: string; // 船型 3D BIM 模型分层代码 ('deck' | 'middle' | 'bottom' | 'engine' | 'bridge')
-  modelLevelName?: string; // 船型模型分层名称
-  type: string;
-  color: string;
-  shape: string;
-  points: string;
-  status: 'active' | 'inactive';
-  dangerLevel: 'high' | 'medium' | 'low';
-  deviceIds: string[];
-  devices: { id: string; name: string; type: string; status: string }[];
-  todayViolations: number;
-}
+export type { FenceData };
 
 interface CreateFenceModalProps {
   isOpen: boolean;
@@ -216,6 +198,7 @@ export function CreateFenceModal({
   const [projectSection, setProjectSection] = useState<string>('全船通用作业面');
   
   const [fenceType, setFenceType] = useState('作业区');
+  const [maxCapacity, setMaxCapacity] = useState<string>('20');
   const [fenceColor, setFenceColor] = useState('#ef4444');
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [fenceShape, setFenceShape] = useState('自定义');
@@ -238,6 +221,7 @@ export function CreateFenceModal({
         setScopeType('project');
         setProjectId(currentProjectId);
       }
+      setMaxCapacity(prev => (prev && Number(prev) > 0 ? prev : '20'));
       setIsSubmitted(false);
     }
   }, [isOpen, currentProjectId]);
@@ -268,11 +252,14 @@ export function CreateFenceModal({
 
   // 校验逻辑
   const isNameEmpty = !fenceName.trim();
+  const parsedCapacity = Number(maxCapacity);
+  const isMaxCapacityInvalid = !maxCapacity.trim() || !Number.isFinite(parsedCapacity) || parsedCapacity <= 0;
   const isProjectIdEmpty = scopeType === 'project' && (!projectId || !projectId.trim());
   const isProjectPhaseEmpty = scopeType === 'project' && (!projectPhase || !projectPhase.trim() || projectPhase.includes('请选择'));
   const isModelLevelEmpty = scopeType === 'project' && !modelLevel;
 
   const showNameError = isSubmitted && isNameEmpty;
+  const showMaxCapacityError = isSubmitted && isMaxCapacityInvalid;
   const showProjectIdError = isSubmitted && isProjectIdEmpty;
   const showProjectPhaseError = isSubmitted && isProjectPhaseEmpty;
   const showModelLevelError = isSubmitted && isModelLevelEmpty;
@@ -281,7 +268,7 @@ export function CreateFenceModal({
     setIsSubmitted(true);
     
     // 当选择关联船舶项目时，校验关联表单项为必填项
-    if (isNameEmpty || isProjectIdEmpty || isProjectPhaseEmpty || isModelLevelEmpty) {
+    if (isNameEmpty || isMaxCapacityInvalid || isProjectIdEmpty || isProjectPhaseEmpty || isModelLevelEmpty) {
       return;
     }
 
@@ -305,6 +292,7 @@ export function CreateFenceModal({
       modelLevel: scopeType === 'project' ? modelLevel : undefined,
       modelLevelName: scopeType === 'project' ? (selectedLayer ? selectedLayer.fullName : '甲板层') : undefined,
       type: fenceType,
+      maxCapacity: Math.floor(parsedCapacity),
       color: fenceColor,
       shape: fenceShape,
       points: drawnPoints || '25,25 45,25 48,45 22,45',
@@ -321,6 +309,7 @@ export function CreateFenceModal({
 
   const handleClose = () => {
     setFenceName('');
+    setMaxCapacity('20');
     setAssociatedDevices([]);
     setIsSubmitted(false);
     setIsColorPickerOpen(false);
@@ -339,6 +328,7 @@ export function CreateFenceModal({
         projectPhase,
         projectSection,
         type: fenceType,
+        maxCapacity: Number(maxCapacity) || 20,
         color: fenceColor,
         shape: fenceShape
       });
@@ -619,6 +609,64 @@ export function CreateFenceModal({
                 ))}
               </select>
               <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* 4.1 区域上限人数 (必填，联动人员超员告警策略) */}
+          <div className="flex items-start">
+            <label className="w-24 text-right pr-4 font-medium text-slate-600 pt-2 shrink-0">
+              <span className="text-rose-500 font-bold mr-1">*</span>上限人数
+            </label>
+            <div className="flex-1 space-y-1.5">
+              <div className="flex items-center gap-3">
+                <div className={`inline-flex items-center border rounded-md overflow-hidden bg-white ${
+                  showMaxCapacityError ? 'border-rose-500 ring-1 ring-rose-500/20' : 'border-slate-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/20'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = Number(maxCapacity) || 1;
+                      setMaxCapacity(String(Math.max(1, cur - 1)));
+                    }}
+                    className="px-2.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border-r border-slate-200 transition-colors cursor-pointer"
+                    title="减少人数上限"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={maxCapacity}
+                    onChange={(e) => setMaxCapacity(e.target.value)}
+                    placeholder="请输入人数上限"
+                    className="w-24 px-2 py-1.5 text-center text-slate-800 text-sm font-mono font-bold focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = Number(maxCapacity) || 0;
+                      setMaxCapacity(String(Math.min(999, cur + 1)));
+                    }}
+                    className="px-2.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border-l border-slate-200 transition-colors cursor-pointer"
+                    title="增加人数上限"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="px-3 py-2 bg-slate-100 text-slate-600 text-xs font-semibold border-l border-slate-200">
+                    人
+                  </span>
+                </div>
+                <span className="text-xs text-slate-500 flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <span>关联“人员超员”告警策略时自动读取此区域核定上限</span>
+                </span>
+              </div>
+              {showMaxCapacityError && (
+                <div className="text-rose-500 text-xs font-normal">
+                  请设置大于 0 的区域上限人数
+                </div>
+              )}
             </div>
           </div>
 
