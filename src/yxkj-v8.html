@@ -1616,71 +1616,74 @@
       return records;
     }
 
-    /* 为单个空间生成历史告警信息（未审批进入、超2小时作业、气体超限、禁入闯入） */
+    /* 为单个空间生成历史告警信息（仅包含：人员禁入、超员、长时间作业提醒） */
+    function addMinsToClock(clockStr, addMins, secOverride){
+      var parts = (clockStr || "08:00:00").split(":");
+      var hh = parseInt(parts[0], 10) || 0;
+      var mm = parseInt(parts[1], 10) || 0;
+      var ss = secOverride != null ? secOverride : (parseInt(parts[2], 10) || 0);
+      var total = Math.min(23 * 60 + 59, hh * 60 + mm + addMins);
+      return pad(Math.floor(total / 60)) + ":" + pad(total % 60) + ":" + pad(ss);
+    }
     function makeHistoryAlarms(s, yard, spIdx, records){
       var alarms = [];
-      var activeDays = {};
+      var recordsByDay = {};
       (records || []).forEach(function(r){
-        activeDays[r.dayOffset] = true;
-        if(!yard && !r.hasApproval){
+        if(!recordsByDay[r.dayOffset]) recordsByDay[r.dayOffset] = [];
+        recordsByDay[r.dayOffset].push(r);
+
+        if(!yard && (!r.hasApproval || s.forbid === "intrude")){
           alarms.push({
-            id: "ALM-U-" + spIdx + "-" + r.dayOffset + "-" + r.id,
+            id: "ALM-B-" + spIdx + "-" + r.dayOffset + "-" + r.id,
             dateStr: r.dateStr,
             dayOffset: r.dayOffset,
             timeStr: r.entryTimeStr,
-            alarmType: s.forbid === "intrude" ? "禁入闯入告警" : "未审批进入告警",
+            entryTimeStr: r.entryTimeStr,
+            alarmType: "人员禁入",
             level: "high",
             personName: r.name,
             workerId: r.id,
-            detail: (s.forbid === "intrude" ? "违反禁入封舱管控规定擅自进入【" : "未办理有效审批单据进入【") + s.name + "】，系统已触发声光拦截告警。",
-            status: "已拦截撤离",
-            handler: s.guardian
+            detail: (s.forbid === "intrude" ? "违反封舱禁入管控规定擅自进入【" : "未办理有效进入权限擅自进入禁入区域【") + s.name + "】，系统已触发声光拦截告警。"
           });
         }
         if(!(yard && !s.isConfined) && r.stayMins >= 120){
           alarms.push({
-            id: "ALM-V-" + spIdx + "-" + r.dayOffset + "-" + r.id,
+            id: "ALM-L-" + spIdx + "-" + r.dayOffset + "-" + r.id,
             dateStr: r.dateStr,
             dayOffset: r.dayOffset,
-            timeStr: r.exitTimeStr,
-            alarmType: "超2小时作业告警",
+            timeStr: addMinsToClock(r.entryTimeStr, 120, 0),
+            entryTimeStr: r.entryTimeStr,
+            alarmType: "长时间作业提醒",
             level: "warn",
             personName: r.name,
             workerId: r.id,
-            detail: "连续作业时长达 " + fmtStayMins(r.stayMins) + "（超过2小时安全时限），触发超2小时作业提示，已通知监护人跟进。",
-            status: "已提醒出舱",
-            handler: s.guardian
+            detail: "连续作业时长达 " + fmtStayMins(r.stayMins) + "（超过2小时安全作业时限），系统已下发长时间作业提醒。"
           });
         }
       });
 
-      var now = Date.now();
-      for(var dayOff = 0; dayOff <= 6; dayOff++){
-        if(!activeDays[dayOff] && !s.warn) continue;
-        var triggerGas = (s.warn && (dayOff === 1 || (spIdx + dayOff) % 2 === 0)) || (s.isConfined && (spIdx + dayOff) % 5 === 1);
-        if(!triggerGas) continue;
-        var dObj = new Date(now - dayOff * 86400000);
-        var dStr = dObj.getFullYear() + "-" + pad(dObj.getMonth()+1) + "-" + pad(dObj.getDate());
-        var gKind = s.warn || (["co","h2s","o2"][(spIdx + dayOff) % 3]);
-        var gDetail = gKind === "co"
-          ? "CO 浓度瞬时升至 " + (18.4 + ((spIdx + dayOff) % 6) * 1.2).toFixed(1) + " ppm（限值 <15ppm），触发一级气体超限告警并联动强排风。"
-          : (gKind === "h2s"
-            ? "H₂S 浓度监测达 " + (7.2 + ((spIdx + dayOff) % 5) * 0.7).toFixed(1) + " ppm（限值 <6ppm），触发有毒气体告警，全员撤离通风复测。"
-            : "O₂ 体积分数降至 " + (18.3 + ((spIdx + dayOff) % 4) * 0.2).toFixed(1) + "%（低于安全下限 19.5%），触发缺氧预警并开启机械送风。");
+      Object.keys(recordsByDay).forEach(function(dayKey){
+        var dayOff = parseInt(dayKey, 10);
+        var dayRecs = recordsByDay[dayKey] || [];
+        if(yard || dayRecs.length === 0) return;
+        var shouldTriggerOverload = s.warn || (s.entered > s.lim) || ((spIdx + dayOff) % 3 === 1);
+        if(!shouldTriggerOverload) return;
+        var ovRec = dayRecs[dayRecs.length - 1];
+        var overCount = 1 + ((spIdx + dayOff) % 2);
+        var actualNum = (s.lim || 4) + overCount;
         alarms.push({
-          id: "ALM-G-" + spIdx + "-" + dayOff,
-          dateStr: dStr,
-          dayOffset: dayOff,
-          timeStr: pad(9 + (dayOff % 6)) + ":" + pad((spIdx * 13 + dayOff * 7) % 60) + ":18",
-          alarmType: "气体超限告警",
+          id: "ALM-O-" + spIdx + "-" + dayOff + "-" + ovRec.id,
+          dateStr: ovRec.dateStr,
+          dayOffset: ovRec.dayOffset,
+          timeStr: addMinsToClock(ovRec.entryTimeStr, 2, 18),
+          entryTimeStr: ovRec.entryTimeStr,
+          alarmType: "超员",
           level: "high",
-          personName: "传感器自动监测",
-          workerId: "GAS-" + pad((spIdx % 99) + 1),
-          detail: gDetail,
-          status: "通风复测正常",
-          handler: s.guardian
+          personName: ovRec.name,
+          workerId: ovRec.id,
+          detail: "该空间额定定员 " + (s.lim || 4) + " 人，瞬时在舱人数达 " + actualNum + " 人（超员 " + overCount + " 人），触发超员告警。"
         });
-      }
+      });
 
       alarms.sort(function(a, b){
         if(a.dateStr !== b.dateStr) return a.dateStr < b.dateStr ? 1 : -1;
@@ -2994,6 +2997,10 @@
         b.textContent = st.t;
       }
 
+      var banAlarmsCount = histAlarms.filter(function(a){ return a.alarmType === "人员禁入"; }).length;
+      var overAlarmsCount = histAlarms.filter(function(a){ return a.alarmType === "超员"; }).length;
+      var longWorkAlarmsCount = histAlarms.filter(function(a){ return a.alarmType === "长时间作业提醒"; }).length;
+
       /* 1. 安全告警横幅 */
       var alertsHtml = '';
       if(state.detailTab === "cur"){
@@ -3011,7 +3018,7 @@
       } else {
         if(histAlarms.length > 0){
           alertsHtml += '<div class="d-alert-box '+(hdPeriod.highAlarms.length > 0 ? 'red' : 'amber')+'">'
-            + '<span>🚨 <b>'+scopeLabel+'历史告警汇总</b>：【'+s.name+'】'+scopeLabel+'共进出 <b>'+hist.length+'</b> 人次，触发历史告警 <b>'+histAlarms.length+'</b> 条（其中严重告警 <b>'+hdPeriod.highAlarms.length+'</b> 条、预警 <b>'+hdPeriod.warnAlarms.length+'</b> 条），请查看下方历史告警信息明细。</span>'
+            + '<span>🚨 <b>'+scopeLabel+'历史告警汇总</b>：【'+s.name+'】'+scopeLabel+'共进出 <b>'+hist.length+'</b> 人次，触发历史告警 <b>'+histAlarms.length+'</b> 条（人员禁入 <b>'+banAlarmsCount+'</b> 条、超员 <b>'+overAlarmsCount+'</b> 条、长时间作业提醒 <b>'+longWorkAlarmsCount+'</b> 条），请查看下方历史告警信息明细。</span>'
             + '</div>';
         } else {
           alertsHtml += '<div class="d-alert-box ok">'
@@ -3101,8 +3108,9 @@
           var filtersEl = document.getElementById("dHistAlarmFilters");
           filtersEl.innerHTML =
             '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="ALL"?' active':'')+'" data-haf="ALL">全部 ('+histAlarms.length+')</button>'
-            + '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="HIGH"?' active':'')+'" data-haf="HIGH">严重告警 ('+hdPeriod.highAlarms.length+')</button>'
-            + '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="WARN"?' active':'')+'" data-haf="WARN">超时/一般预警 ('+hdPeriod.warnAlarms.length+')</button>';
+            + '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="人员禁入"?' active':'')+'" data-haf="人员禁入">人员禁入 ('+banAlarmsCount+')</button>'
+            + '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="超员"?' active':'')+'" data-haf="超员">超员 ('+overAlarmsCount+')</button>'
+            + '<button type="button" class="d-hf-btn'+(state.histAlarmFilter==="长时间作业提醒"?' active':'')+'" data-haf="长时间作业提醒">长时间作业提醒 ('+longWorkAlarmsCount+')</button>';
           Array.prototype.forEach.call(filtersEl.querySelectorAll("[data-haf]"), function(btn){
             btn.addEventListener("click", function(){
               state.histAlarmFilter = btn.getAttribute("data-haf");
@@ -3110,21 +3118,19 @@
             });
           });
           var filteredAlarms = histAlarms.filter(function(a){
-            if(state.histAlarmFilter === "HIGH") return a.level === "high";
-            if(state.histAlarmFilter === "WARN") return a.level !== "high";
-            return true;
+            if(state.histAlarmFilter === "ALL") return true;
+            return a.alarmType === state.histAlarmFilter;
           });
           document.getElementById("dHistAlarmsWrap").innerHTML = filteredAlarms.length
-            ? '<table class="crew-table"><thead><tr><th>日期</th><th>告警时间</th><th>告警类型</th><th>告警等级</th><th>关联人员/点位</th><th>告警详情说明</th><th>处置状态</th><th>监护人</th></tr></thead><tbody>'
+            ? '<table class="crew-table"><thead><tr><th>日期</th><th>告警时间</th><th>告警类型</th><th>关联人员</th><th>进入时间</th><th>告警说明</th></tr></thead><tbody>'
               + filteredAlarms.map(function(a){
                   var isHigh = a.level === "high";
-                  var lvChip = isHigh ? '<span class="alarm-lv-chip high">严重告警</span>' : '<span class="alarm-lv-chip warn">一般预警</span>';
-                  var stChip = '<span class="permit-chip '+(isHigh && a.status.indexOf("中")>=0 ? 'bad' : 'ok')+'">'+a.status+'</span>';
+                  var typeColor = a.alarmType === "人员禁入" ? '#ff96a8' : (a.alarmType === "超员" ? '#ff9e64' : '#ffd275');
                   return '<tr'+(isHigh ? ' class="intrude-row"' : ' class="timeout-row"')+'><td class="c-time">'+a.dateStr+'</td><td class="c-time">'+a.timeStr+'</td>'
-                    + '<td style="font-weight:700;color:'+(isHigh ? '#ff96a8' : '#ffd275')+'">'+a.alarmType+'</td>'
-                    + '<td>'+lvChip+'</td><td class="c-name">'+a.personName+'</td>'
-                    + '<td style="white-space:normal;min-width:260px;line-height:1.4">'+a.detail+'</td>'
-                    + '<td>'+stChip+'</td><td>'+a.handler+'</td></tr>';
+                    + '<td style="font-weight:700;color:'+typeColor+'">'+a.alarmType+'</td>'
+                    + '<td class="c-name">'+a.personName+'</td>'
+                    + '<td class="c-time">'+(a.entryTimeStr || '-')+'</td>'
+                    + '<td style="white-space:normal;min-width:260px;line-height:1.4">'+a.detail+'</td></tr>';
                 }).join("")
               + '</tbody></table>'
             : '<div class="empty-note" style="padding:18px 10px">该筛选条件下暂无历史告警记录。</div>';

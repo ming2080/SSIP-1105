@@ -35,6 +35,7 @@ import { ProjectVersionsModal } from './ProjectVersionsModal';
 import { ProjectDetailModal } from './ProjectDetailModal';
 import { ProjectConfinedSpaceModal } from './ProjectConfinedSpaceModal';
 import { ProjectCabinConfigModal } from './ProjectCabinConfigModal';
+import { ProjectBoardingPointModal } from './ProjectBoardingPointModal';
 
 // 导入 8 款船型的 3D 数字孪生模型高清渲染图作为船模缩略图
 import lngModelBg from '@/src/assets/images/lng_ship_model_1787972569670.jpg';
@@ -215,6 +216,7 @@ export function ProjectManagement() {
   const [versionsProjectId, setVersionsProjectId] = useState<string | null>(null);
   const [confinedSpaceProject, setConfinedSpaceProject] = useState<CreatedProjectData | null>(null);
   const [cabinConfigProject, setCabinConfigProject] = useState<CreatedProjectData | null>(null);
+  const [boardingPointProject, setBoardingPointProject] = useState<CreatedProjectData | null>(null);
   const [openMoreMenuId, setOpenMoreMenuId] = useState<string | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
 
@@ -735,7 +737,7 @@ export function ProjectManagement() {
                               ? 'bg-blue-600 text-white border-blue-600'
                               : 'text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/90 border-slate-300/80'
                           }`}
-                          title="更多操作（有限空间、船舱配置）"
+                          title="更多操作（有限空间、船舱配置、登船点配置）"
                         >
                           <span>更多</span>
                           <ChevronDown className={`w-3 h-3 transition-transform ${openMoreMenuId === `tbl-${project.id}` ? 'rotate-180' : ''}`} />
@@ -776,6 +778,22 @@ export function ProjectManagement() {
                                 <div>
                                   <div className="font-bold text-blue-700">船舱配置</div>
                                   <div className="text-[10px] text-slate-400">进出规则与激励器关联</div>
+                                </div>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBoardingPointProject(project);
+                                  setOpenMoreMenuId(null);
+                                }}
+                                className="w-full px-3 py-2 text-xs text-slate-800 hover:bg-teal-50 hover:text-teal-900 flex items-center gap-2 cursor-pointer transition-colors text-left"
+                                title="配置船舶登录口地面与船上激励器配对及上下船方向规则"
+                              >
+                                <Anchor className="w-4 h-4 text-teal-600 shrink-0" />
+                                <div>
+                                  <div className="font-bold text-teal-700">登船点配置</div>
+                                  <div className="text-[10px] text-slate-400">上下船配对与方向规则</div>
                                 </div>
                               </button>
                             </div>
@@ -946,7 +964,7 @@ export function ProjectManagement() {
                         ? 'bg-blue-600 text-white border-blue-600'
                         : 'bg-slate-100 hover:bg-slate-200/90 text-slate-700 border-slate-200'
                     }`}
-                    title="更多操作"
+                    title="更多操作（有限空间、船舱配置、登船点配置）"
                   >
                     <span className="text-[11px]">更多</span>
                     <ChevronDown className={`w-3 h-3 transition-transform ${openMoreMenuId === `card-${project.id}` ? 'rotate-180' : ''}`} />
@@ -980,6 +998,18 @@ export function ProjectManagement() {
                         >
                           <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                           <span className="font-semibold text-blue-700">船舱配置</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBoardingPointProject(project);
+                            setOpenMoreMenuId(null);
+                          }}
+                          className="w-full px-3 py-1.5 text-xs text-slate-800 hover:bg-teal-50 hover:text-teal-900 flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                          <Anchor className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                          <span className="font-semibold text-teal-700">登船点配置</span>
                         </button>
                       </div>
 
@@ -1131,6 +1161,21 @@ export function ProjectManagement() {
           isOpen={true}
           project={cabinConfigProject}
           onClose={() => setCabinConfigProject(null)}
+          onSuccess={(msg) => {
+            setSuccessBanner(msg);
+            setTimeout(() => {
+              setSuccessBanner(null);
+            }, 5000);
+          }}
+        />
+      )}
+
+      {/* 船舶项目登船点配置模态框（地面/船上成对激励器与上下船方向规则） */}
+      {boardingPointProject && (
+        <ProjectBoardingPointModal
+          isOpen={true}
+          project={boardingPointProject}
+          onClose={() => setBoardingPointProject(null)}
           onSuccess={(msg) => {
             setSuccessBanner(msg);
             setTimeout(() => {
