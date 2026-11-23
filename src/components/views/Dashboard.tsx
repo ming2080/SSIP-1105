@@ -50,7 +50,8 @@ import {
   Camera,
   TrendingUp,
   X,
-  Tv
+  Tv,
+  LayoutDashboard
 } from 'lucide-react';
 import { ViewType } from '@/src/types';
 
@@ -2118,9 +2119,20 @@ interface DashboardProps {
   onNavigate?: (view: ViewType, extra?: { personId?: string; autoPlay?: boolean; projectId?: string; viewScope?: 'yard' | 'project' }) => void;
   initialProjectId?: string;
   initialViewScope?: 'yard' | 'project';
+  exhibitionMode?: boolean;
+  resetHomeSignal?: number;
+  onExhibitionSwitchWorkface?: () => void;
 }
 
-export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewScope }: DashboardProps) {
+export function Dashboard({
+  onExit,
+  onNavigate,
+  initialProjectId,
+  initialViewScope,
+  exhibitionMode = false,
+  resetHomeSignal = 0,
+  onExhibitionSwitchWorkface
+}: DashboardProps) {
   // 核心视图切换状态：'yard' (厂区) | 'project' (造船项目)
   const [viewScope, setViewScope] = useState<'yard' | 'project'>(initialViewScope || (initialProjectId ? 'project' : 'yard'));
   
@@ -2178,6 +2190,24 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
 
   // 获取当前选中的造船项目配置
   const currentProject = projectListConfig.find(p => p.id === selectedProjectId) || projectListConfig[0];
+
+  // 展厅展示模式：无操作超过 5 分钟自动回到厂区首页并复位所有弹窗状态
+  useEffect(() => {
+    if (!exhibitionMode || resetHomeSignal <= 0) return;
+    setViewScope('yard');
+    setIsPanelsVisible(true);
+    setSearchKey('');
+    setIsProjectDropdownOpen(false);
+    setIsSearchTypeDropdownOpen(false);
+    setShowModelLevelMenu(false);
+    setSelectedDeviceDetail(null);
+    setSelectedFenceDetail(null);
+    setSelectedWorkerDetail(null);
+    setSelectedShipDetail(null);
+    setSelectedWorkerCluster(null);
+    setActiveAlarmModalData(null);
+    setIsAlarmListModalOpen(false);
+  }, [exhibitionMode, resetHomeSignal]);
 
   // 时钟更新定时器
   useEffect(() => {
@@ -3273,24 +3303,26 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
                 </div>
               </div>
 
-              {/* 轨迹回放 */}
-              <div className="mt-2.5 pt-2 border-t border-[#1f4a7c]">
-                <button
-                  onClick={() => {
-                    const personId = selectedWorkerDetail.workerRef?.personId || 'EMP-001';
-                    if (onNavigate) {
-                      onNavigate('personnel', { personId, autoPlay: true });
-                    } else {
-                      setAlarmNoticeToast(`已调取【${selectedWorkerDetail.name}】今日作业行动轨迹`);
-                      setTimeout(() => setAlarmNoticeToast(null), 3000);
-                    }
-                  }}
-                  className="w-full py-1.5 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400 text-xs font-bold text-[#00e5ff] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(0,229,255,0.2)]"
-                >
-                  <Crosshair className="w-3.5 h-3.5 text-[#00e5ff]" />
-                  <span>查看轨迹回放</span>
-                </button>
-              </div>
+              {/* 轨迹回放（展厅展示模式下不提供跳离驾驶舱入口） */}
+              {!exhibitionMode && (
+                <div className="mt-2.5 pt-2 border-t border-[#1f4a7c]">
+                  <button
+                    onClick={() => {
+                      const personId = selectedWorkerDetail.workerRef?.personId || 'EMP-001';
+                      if (onNavigate) {
+                        onNavigate('personnel', { personId, autoPlay: true });
+                      } else {
+                        setAlarmNoticeToast(`已调取【${selectedWorkerDetail.name}】今日作业行动轨迹`);
+                        setTimeout(() => setAlarmNoticeToast(null), 3000);
+                      }
+                    }}
+                    className="w-full py-1.5 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-400 text-xs font-bold text-[#00e5ff] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(0,229,255,0.2)]"
+                  >
+                    <Crosshair className="w-3.5 h-3.5 text-[#00e5ff]" />
+                    <span>查看轨迹回放</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -3364,23 +3396,25 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
                       </div>
                     </div>
 
-                    {/* 点击查看轨迹跳转按钮 */}
-                    <button
-                      onClick={() => {
-                        const personId = worker.personId || 'EMP-001';
-                        if (onNavigate) {
-                          onNavigate('personnel', { personId, autoPlay: true });
-                        } else {
-                          setAlarmNoticeToast(`跳转查看【${worker.name}】定位轨迹`);
-                          setTimeout(() => setAlarmNoticeToast(null), 3000);
-                        }
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-400 text-[11px] font-bold text-cyan-300 transition-all cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap hover:shadow-[0_0_10px_rgba(0,210,255,0.4)]"
-                      title="点击跳转到人员定位页面并自动播放历史轨迹"
-                    >
-                      <Crosshair className="w-3 h-3 text-cyan-300" />
-                      <span>查看轨迹</span>
-                    </button>
+                    {/* 点击查看轨迹跳转按钮（展厅模式下隐藏） */}
+                    {!exhibitionMode && (
+                      <button
+                        onClick={() => {
+                          const personId = worker.personId || 'EMP-001';
+                          if (onNavigate) {
+                            onNavigate('personnel', { personId, autoPlay: true });
+                          } else {
+                            setAlarmNoticeToast(`跳转查看【${worker.name}】定位轨迹`);
+                            setTimeout(() => setAlarmNoticeToast(null), 3000);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-400 text-[11px] font-bold text-cyan-300 transition-all cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap hover:shadow-[0_0_10px_rgba(0,210,255,0.4)]"
+                        title="点击跳转到人员定位页面并自动播放历史轨迹"
+                      >
+                        <Crosshair className="w-3 h-3 text-cyan-300" />
+                        <span>查看轨迹</span>
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -3943,25 +3977,29 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
       {/* 2. 顶部 Header 栏 */}
       <header 
         onClick={(e) => e.stopPropagation()} 
-        className="relative z-40 h-[82px] flex items-start justify-between px-6 pt-2 bg-gradient-to-b from-[#031326]/95 via-[#031326]/60 to-transparent shrink-0 cursor-default"
+        className={`relative z-40 h-[82px] flex items-start justify-between pt-2 bg-gradient-to-b from-[#031326]/95 via-[#031326]/60 to-transparent shrink-0 cursor-default ${
+          exhibitionMode ? 'pl-6 pr-4' : 'px-6'
+        }`}
       >
         
-        {/* 左侧：「返回系统」按钮与搜索查询输入框 */}
+        {/* 左侧：「返回系统」按钮（普通模式） + 搜索框 */}
         <div className="flex items-center gap-2.5 pt-2 whitespace-nowrap shrink-0">
-          <button 
-            onClick={() => {
-              if (onExit) {
-                onExit();
-              } else if (onNavigate) {
-                onNavigate('projects');
-              }
-            }}
-            className="flex items-center gap-1.5 text-xs text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 border border-[#00d2ff]/80 px-3.5 py-1.5 rounded-full transition-all duration-200 shadow-[0_0_14px_rgba(0,210,255,0.4)] hover:shadow-[0_0_20px_rgba(0,210,255,0.7)] whitespace-nowrap shrink-0 cursor-pointer"
-            title="返回系统主菜单"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="font-medium whitespace-nowrap">返回系统</span>
-          </button>
+          {!exhibitionMode && (
+            <button 
+              onClick={() => {
+                if (onExit) {
+                  onExit();
+                } else if (onNavigate) {
+                  onNavigate('projects');
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 border border-[#00d2ff]/80 px-3.5 py-1.5 rounded-full transition-all duration-200 shadow-[0_0_14px_rgba(0,210,255,0.4)] hover:shadow-[0_0_20px_rgba(0,210,255,0.7)] whitespace-nowrap shrink-0 cursor-pointer"
+              title="返回系统主菜单"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="font-medium whitespace-nowrap">返回系统</span>
+            </button>
+          )}
 
           {/* 综合类型搜索框：仅保留人员与设备两种分类 */}
           <div className="relative flex items-center bg-[#071d3d]/90 border border-[#1f4a7c] focus-within:border-[#00d2ff] rounded-full p-0.5 shadow-[inset_0_0_8px_rgba(0,0,0,0.4),0_0_10px_rgba(0,210,255,0.15)] transition-all">
@@ -4176,8 +4214,10 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
           </div>
         </div>
 
-        {/* 右侧：时间日期与天气、「触发告警信息」按钮、全景模式按钮(仅图标)、管理员标识 */}
-        <div className="flex justify-end items-center gap-3 pt-2 whitespace-nowrap shrink-0">
+        {/* 右侧：时间日期与天气、「作业看板」按钮(仅普通模式)、「触发告警信息」按钮、全景模式按钮、管理员标识、展厅双屏切换按钮(展厅模式右上角) */}
+        <div className={`flex justify-end items-center whitespace-nowrap shrink-0 ${
+          exhibitionMode ? 'gap-2.5 pt-1' : 'gap-3 pt-2'
+        }`}>
           
           {/* 时间、日期与天气 */}
           <div className="flex items-center text-[12px] text-[#8ab4f8] font-mono tracking-wide whitespace-nowrap">
@@ -4187,23 +4227,25 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
             </span>
           </div>
 
-          {/* 📺 作业面大屏链接按钮 */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onNavigate) {
-                onNavigate('workface_screen');
-              }
-              window.dispatchEvent(new CustomEvent('navigate_view', { detail: { view: 'workface_screen' } }));
-            }}
-            className="px-3 py-1 text-xs font-bold border border-[#00d2ff]/80 bg-gradient-to-r from-[#06244d] via-[#0d3b6f] to-[#082046] text-[#00d2ff] hover:text-white hover:border-[#00e676] hover:shadow-[0_0_14px_rgba(0,230,118,0.5)] rounded-full transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-[0_0_12px_rgba(0,210,255,0.4)] active:scale-95 group"
-            title="进入作业看板安全监控系统"
-          >
-            <Tv className="w-3.5 h-3.5 text-[#00d2ff] group-hover:scale-110 group-hover:text-[#00e676] transition-transform animate-pulse" />
-            <span>作业看板</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#00d2ff] group-hover:bg-[#00e676] shadow-[0_0_6px_#00d2ff]"></span>
-          </button>
+          {/* 📺 作业看板链接按钮（仅普通模式显示；展厅模式下统一使用右上角双屏切换胶囊） */}
+          {!exhibitionMode && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onNavigate) {
+                  onNavigate('workface_screen');
+                }
+                window.dispatchEvent(new CustomEvent('navigate_view', { detail: { view: 'workface_screen' } }));
+              }}
+              className="border border-[#00d2ff]/80 bg-gradient-to-r from-[#06244d] via-[#0d3b6f] to-[#082046] text-[#00d2ff] hover:text-white hover:border-[#00e676] hover:shadow-[0_0_14px_rgba(0,230,118,0.5)] rounded-full transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-[0_0_12px_rgba(0,210,255,0.4)] active:scale-95 group px-3 py-1 text-xs font-bold"
+              title="进入作业看板安全监控系统"
+            >
+              <Tv className="w-3.5 h-3.5 text-[#00d2ff] group-hover:scale-110 group-hover:text-[#00e676] transition-transform animate-pulse" />
+              <span>作业看板</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00d2ff] group-hover:bg-[#00e676] shadow-[0_0_6px_#00d2ff]"></span>
+            </button>
+          )}
 
           {/* 🚨 触发告警信息按钮 (与左侧查询框互换位置) */}
           <button 
@@ -4256,6 +4298,27 @@ export function Dashboard({ onExit, onNavigate, initialProjectId, initialViewSco
             </div>
             <span className="tracking-wide whitespace-nowrap font-medium">管理员</span>
           </div>
+
+          {/* 展厅展示模式：右上角「驾驶舱 / 作业面大屏」切换胶囊（与作业面大屏右上角控制栏位置与风格保持一致） */}
+          {exhibitionMode && (
+            <div className="flex items-center gap-1.5 bg-[#03152d]/90 backdrop-blur-md px-2 py-1.5 rounded-full border border-cyan-400/45 shadow-[0_6px_28px_rgba(0,0,0,0.85),0_0_16px_rgba(0,210,255,0.28)] shrink-0">
+              <span className="flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-xs font-extrabold tracking-wide shadow-[0_0_16px_rgba(0,210,255,0.55)]">
+                <LayoutDashboard className="w-4 h-4" />
+                <span>驾驶舱</span>
+              </span>
+              {onExhibitionSwitchWorkface && (
+                <button
+                  type="button"
+                  onClick={onExhibitionSwitchWorkface}
+                  className="flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-full text-cyan-200 hover:text-white hover:bg-cyan-500/20 text-xs font-extrabold tracking-wide active:scale-95 transition-all cursor-pointer"
+                  title="触摸切换至作业面大屏"
+                >
+                  <Tv className="w-4 h-4 text-[#00d2ff]" />
+                  <span>作业面大屏</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 

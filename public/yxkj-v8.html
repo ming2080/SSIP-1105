@@ -163,6 +163,15 @@
       .proj .pstat{ margin-left:auto; flex:none; text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; }
       .proj .pstat b{ display:block; font-size:15px; color:var(--cyan); }
       .proj .pstat span{ font-size:10px; color:var(--muted2); letter-spacing:1px; }
+      .proj .pier-badge{ display:inline-flex; align-items:center; gap:4px; margin-top:4px; padding:1px 7px; border-radius:4px; font-size:10.5px; font-weight:700; color:#7dfcd0; background:rgba(31,224,138,.12); border:1px solid rgba(31,224,138,.4); }
+      .ship-play-bar{ display:none; align-items:center; justify-content:space-between; gap:6px; padding:7px 10px; margin:0 6px 4px; border-radius:var(--r-md); background:rgba(0,110,180,.16); border:1px solid rgba(0,229,255,.32); }
+      .ship-play-bar.show{ display:flex; }
+      .ship-play-status{ display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#bfefff; min-width:0; }
+      .ship-play-dot{ width:7px; height:7px; border-radius:999px; background:#1fe08a; box-shadow:0 0 8px #1fe08a; flex:none; }
+      .ship-play-dot.paused{ background:#ffb020; box-shadow:0 0 8px #ffb020; }
+      .ship-play-actions{ display:flex; align-items:center; gap:4px; flex:none; }
+      .sp-btn{ cursor:pointer; min-height:28px; padding:3px 9px; border-radius:6px; border:1px solid rgba(0,200,255,.38); background:rgba(3,20,46,.85); color:#dff6ff; font-family:var(--font); font-size:11.5px; font-weight:600; transition:background .15s, border-color .15s; }
+      .sp-btn:hover{ background:rgba(0,130,210,.35); border-color:var(--cyan); }
       /* ---------- center ---------- */
       .center-toolbar{ height:42px; flex:none; display:flex; align-items:center; gap:14px; padding:0 14px; }
       .view-label{ display:flex; align-items:center; gap:8px; font-size:15.5px; font-weight:700; letter-spacing:2px; color:#eaf8ff; white-space:nowrap; }
@@ -836,10 +845,21 @@
         <!-- ===== LEFT ===== -->
         <div class="col col-left">
           <section class="panel proj-panel">
-            <div class="p-head"><span class="tick"></span><h2>区域/船舶选择</h2><span class="en">Area / Ship</span></div>
-            <div class="region-tabs" role="tablist" aria-label="区域切换">
+            <div class="p-head"><span class="tick"></span><h2 id="projPanelTitle">区域/船舶选择</h2><span class="en" id="projPanelEn">Area / Ship</span></div>
+            <div class="region-tabs" id="regionTabs" role="tablist" aria-label="区域切换">
               <button type="button" id="tabYard">厂区</button>
               <button type="button" id="tabShip" class="active">船舶项目</button>
+            </div>
+            <div class="ship-play-bar" id="shipPlayBar">
+              <div class="ship-play-status">
+                <span class="ship-play-dot" id="shipPlayDot"></span>
+                <span id="shipPlayLabel">自动轮播 · 15s</span>
+              </div>
+              <div class="ship-play-actions">
+                <button type="button" class="sp-btn" id="shipPrevBtn" title="上一艘码头船舶">‹</button>
+                <button type="button" class="sp-btn" id="shipPlayToggle">暂停</button>
+                <button type="button" class="sp-btn" id="shipNextBtn" title="下一艘码头船舶">›</button>
+              </div>
             </div>
             <div id="projList"></div>
           </section>
@@ -1032,6 +1052,7 @@
        warn: "co" | "h2s" | "o2" 表示该空间演示超限。 */
     var PROJECTS = [
       { code:"项目 A", name:"15万吨散货船", en:"150K DWT BULK CARRIER · HULL BC-150-01", tag:"散货船",
+        berthType:"slipway", berthName:"平船台",
         desc:"双层底压载舱、艏尖隔舱、大舱合拢搭载",
         ov:{ w:96, wt:180, d:31, dt:40, at:16 },
         confined:[
@@ -1051,7 +1072,8 @@
           {n:"舷侧外板作业面", e:"Side Shell Working Face", lim:14}
         ]},
       { code:"项目 A", name:"大型集装箱船", en:"24,000 TEU CONTAINER SHIP · HULL CS-240-02", tag:"集装箱船",
-        desc:"24,000 TEU，导轨架高空、边压载水舱、主机舱底层",
+        berthType:"pier", berthName:"1号码头（新码头）",
+        desc:"24,000 TEU · 部署 1号码头（新码头）舾装调试",
         ov:{ w:128, wt:200, d:36, dt:42, at:18 },
         confined:[
           {n:"NO.3 压载舱", e:"Balast Tank No.3", lim:12, fixed:{entered:6, working:4}, gas:{o2:20.8, co:0, h2s:0, lel:0}, fan:"run", temp:24.3, light:"正常"},
@@ -1070,6 +1092,7 @@
           {n:"甲板绑扎桥作业面", e:"Lashing Bridge Face", lim:10, warn:"co"}
         ]},
       { code:"项目 B", name:"17.4万m³ LNG运输船", en:"174,000 m³ LNG CARRIER · HULL LNG-174-01", tag:"LNG船",
+        berthType:"slipway", berthName:"2万吨船台",
         desc:"薄膜型 NO.96 绝热液货舱、次屏蔽层、低温惰化氮气机房",
         ov:{ w:84, wt:160, d:33, dt:44, at:15 },
         confined:[
@@ -1089,7 +1112,8 @@
           {n:"机舱设备安装面", e:"Machinery Installation Face", lim:11, forbid:"intrude"}
         ]},
       { code:"项目 C", name:"30万吨级原油船（VLCC）", en:"300K DWT VLCC · HULL OC-300-01", tag:"VLCC",
-        desc:"货油密闭舱、双层底隔离空舱、洗舱间、主泵舱",
+        berthType:"pier", berthName:"3号码头（旧码头）",
+        desc:"货油密闭舱、洗舱间 · 部署 3号码头（旧码头）水下舾装",
         ov:{ w:112, wt:190, d:34, dt:41, at:17 },
         confined:[
           {n:"货油密闭舱", e:"Cargo Oil Tank", lim:10, warn:"co"},
@@ -1106,6 +1130,26 @@
           {n:"船体外板涂装面", e:"Hull Coating Face", lim:15, warn:"co"},
           {n:"机舱施工面", e:"Engine Room Working Face", lim:12},
           {n:"艉部系泊作业面", e:"Aft Mooring Face", lim:7, forbid:"empty"}
+        ]},
+      { code:"项目 D", name:"18,500 DWT 绿色油化船", en:"18,500 DWT CHEMICAL TANKER · HULL CHEM-185", tag:"油化船",
+        berthType:"pier", berthName:"4号码头（浮动码头）",
+        desc:"特种化学品货舱、管系试压 · 部署 4号码头（浮动码头）",
+        ov:{ w:76, wt:140, d:28, dt:36, at:14 },
+        confined:[
+          {n:"NO.1 化学品货舱", e:"Chemical Tank No.1", lim:8},
+          {n:"NO.2 化学品货舱", e:"Chemical Tank No.2", lim:8, warn:"co"},
+          {n:"深井泵舱", e:"Deepwell Pump Room", lim:6},
+          {n:"双层底边舱", e:"Double Bottom Wing Tank", lim:6},
+          {n:"惰性气体隔离舱", e:"IG Cofferdam", lim:4, forbid:"empty"},
+          {n:"洗舱水收集舱", e:"Wash Water Tank", lim:4, warn:"h2s"}
+        ],
+        workface:[
+          {n:"甲板不锈钢管系面", e:"Deck Stainless Piping Face", lim:14},
+          {n:"深井泵调试作业面", e:"Deepwell Pump Test Face", lim:10},
+          {n:"货舱特涂通风面", e:"Cargo Tank Coating Face", lim:12},
+          {n:"机舱管路试压面", e:"Engine Piping Pressure Face", lim:9},
+          {n:"上建生活区舾装面", e:"Living Quarters Face", lim:10},
+          {n:"艉部系泊绞车作业面", e:"Aft Winch Mooring Face", lim:6, forbid:"empty"}
         ]},
       { code:"YARD-MFG", name:"制造部区域", en:"MANUFACTURING DEPT · YARD", tag:"制造部",
         desc:"露天装焊平台、分段堆场、110/128船台、小组立与数控下料加工",
@@ -1394,8 +1438,23 @@
     ];
 
     /* ---------------- 空间运行时状态生成 ---------------- */
+    var urlParams = new URLSearchParams(window.location.search || "");
+    var IS_EXHIBITION = urlParams.get("exhibition") === "1";
+    var PIER_ONLY = urlParams.get("pierOnly") === "1" || IS_EXHIBITION;
+    var AUTO_PLAY_SHIPS = urlParams.get("autoPlayShips") === "1" || IS_EXHIBITION;
+    var HIDE_TOP_FS = urlParams.get("hideTopFs") === "1" || IS_EXHIBITION;
+
     var YARD_ALL_IDX = -1; /* -1 代表全厂所有区域汇总 */
-    var YARD_START = 4; /* 项目数组下标 0–3 为船舶项目，4 起为厂区 */
+    var YARD_START = 5; /* 项目数组下标 0–4 为船舶项目，5 起为厂区 */
+    function getVisibleShipIndices(){
+      var list = [];
+      for(var i = 0; i < YARD_START; i++){
+        if(!PIER_ONLY || (PROJECTS[i] && PROJECTS[i].berthType === "pier")){
+          list.push(i);
+        }
+      }
+      return list;
+    }
     function getYesterdayStr(){
       var d = new Date(Date.now() - 86400000);
       return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
@@ -1408,8 +1467,12 @@
       var d = new Date();
       return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
     }
+    var initialShipIdx = (function(){
+      var ships = getVisibleShipIndices();
+      return ships.indexOf(1) >= 0 ? 1 : (ships[0] != null ? ships[0] : 1);
+    })();
     var state = {
-      proj: 1, mode: "confined", region: "ship",
+      proj: initialShipIdx, mode: "confined", region: "ship",
       spaces: [], sets: null, selIdx: 0, detailIdx: -1, videoIdx: -1,
       timeMode: "today", customDate: getYesterdayStr(),
       detailTab: "cur", analyticsTab: "boarded",
@@ -1859,7 +1922,7 @@
     var projListEl = document.getElementById("projList");
     function renderProjects(){
       var allHtml = '';
-      if(state.region === "yard"){
+      if(state.region === "yard" && !PIER_ONLY){
         allHtml = '<div class="proj'+(state.proj === YARD_ALL_IDX ? " active" : "")+'" data-proj="'+YARD_ALL_IDX+'">'
           + '<span class="p-ico">'+ICO_FACTORY_ALL+'</span>'
           + '<div><h3>全厂所有区域</h3><p>汇总全厂各部门作业面与有限空间数据</p></div>'
@@ -1867,14 +1930,17 @@
       }
       var html = allHtml + PROJECTS.map(function(p,i){
         if(projRegion(i) !== state.region) return "";
+        if(PIER_ONLY && projRegion(i) === "ship" && p.berthType !== "pier") return "";
+        var pierHtml = (PIER_ONLY && p.berthName) ? ('<span class="pier-badge">📍 ' + p.berthName + '</span>') : '';
         return '<div class="proj'+(i===state.proj?" active":"")+'" data-proj="'+i+'">'
           + '<span class="p-ico">'+(projRegion(i)==="yard" ? ICO_FACTORY : ICO_SHIP)+'</span>'
-          + '<div><h3>'+p.name+'</h3><p>'+p.desc+'</p></div>'
+          + '<div><h3>'+p.name+'</h3><p>'+p.desc+'</p>'+pierHtml+'</div>'
           + '</div>';
       }).join("");
       projListEl.innerHTML = html;
       Array.prototype.forEach.call(projListEl.querySelectorAll(".proj"), function(el){
         el.addEventListener("click", function(){
+          shipManualPauseTicks = 1;
           switchProject(parseInt(el.getAttribute("data-proj"),10));
         });
       });
@@ -2676,8 +2742,23 @@
     /* ---------------- 项目 / 模式 / 时间切换 ---------------- */
     function applyProjectUI(){
       var isYard = (state.region === "yard");
-      var curLabel = state.proj === YARD_ALL_IDX ? "当前区域：全厂所有区域（汇总）" : ("当前项目：" + getProjName(state.proj));
+      var curObj = state.proj >= 0 ? PROJECTS[state.proj] : null;
+      var curLabel = state.proj === YARD_ALL_IDX ? "当前区域：全厂所有区域（汇总）"
+        : ("当前项目：" + getProjName(state.proj) + (PIER_ONLY && curObj && curObj.berthName ? (" · " + curObj.berthName) : ""));
       document.getElementById("curProjName").textContent = curLabel;
+
+      var regionTabsEl = document.getElementById("regionTabs");
+      if(regionTabsEl) regionTabsEl.style.display = PIER_ONLY ? "none" : "";
+      var projPanelTitleEl = document.getElementById("projPanelTitle");
+      var projPanelEnEl = document.getElementById("projPanelEn");
+      if(PIER_ONLY){
+        var pierCount = getVisibleShipIndices().length;
+        if(projPanelTitleEl) projPanelTitleEl.textContent = "码头船舶项目 (" + pierCount + ")";
+        if(projPanelEnEl) projPanelEnEl.textContent = "Pier Vessels";
+      }
+      var fsBtnEl = document.getElementById("fsBtn");
+      if(fsBtnEl && HIDE_TOP_FS) fsBtnEl.style.display = "none";
+
       var tabConf = document.getElementById("tabConfined");
       var tabWork = document.getElementById("tabWorkface");
       var tabCabinCrew = document.getElementById("tabCabinCrew");
@@ -2710,6 +2791,9 @@
       }
     }
     function switchProject(i){
+      if(PIER_ONLY && (projRegion(i) === "yard" || !PROJECTS[i] || PROJECTS[i].berthType !== "pier")){
+        return;
+      }
       state.proj = i;
       if(projRegion(i) === "yard") {
         state.region = "yard";
@@ -2802,13 +2886,18 @@
 
     /* 区域切换联动 */
     function switchRegion(r){
+      if(PIER_ONLY && r === "yard") return;
       if(r === state.region){
         if(r === "yard") switchMode("workface");
         return;
       }
       state.region = r;
       if(r === "yard"){ state.proj = YARD_ALL_IDX; state.mode = "workface"; }
-      else { state.proj = 0; state.mode = "confined"; }
+      else {
+        var visibleShips = getVisibleShipIndices();
+        state.proj = visibleShips[0] != null ? visibleShips[0] : 0;
+        state.mode = "confined";
+      }
       buildSpaces(); applyProjectUI(); renderProjects(); renderCards(); refreshOverview(); renderCrewStats(); seedLog(true);
       if(state.mode === "cabincrew") renderCabinCrewPanel();
     }
@@ -3613,6 +3702,94 @@
     window.addEventListener("resize", fit);
     window.addEventListener("orientationchange", fit);
     if(window.visualViewport) window.visualViewport.addEventListener("resize", fit);
+
+    /* ---------------- 展厅模式：船舶自动轮播 & 用户活跃心跳转发 ---------------- */
+    var shipPlayPaused = false;
+    var shipManualPauseTicks = 0;
+    var SHIP_PLAY_INTERVAL_SEC = 15;
+    var shipCountdownSec = SHIP_PLAY_INTERVAL_SEC;
+
+    function stepVisibleShip(delta){
+      var list = getVisibleShipIndices();
+      if(!list.length) return;
+      var curPos = list.indexOf(state.proj);
+      if(curPos < 0) curPos = 0;
+      var nextPos = (curPos + delta + list.length) % list.length;
+      switchProject(list[nextPos]);
+    }
+
+    function updateShipPlayBarUI(){
+      var bar = document.getElementById("shipPlayBar");
+      if(!bar) return;
+      if(!AUTO_PLAY_SHIPS){
+        bar.classList.remove("show");
+        return;
+      }
+      bar.classList.add("show");
+      var dot = document.getElementById("shipPlayDot");
+      var label = document.getElementById("shipPlayLabel");
+      var toggleBtn = document.getElementById("shipPlayToggle");
+      if(dot) dot.classList.toggle("paused", shipPlayPaused);
+      if(label) label.textContent = shipPlayPaused ? "轮播已暂停" : ("自动轮播 · " + shipCountdownSec + "s");
+      if(toggleBtn) toggleBtn.textContent = shipPlayPaused ? "继续" : "暂停";
+    }
+
+    (function initExhibitionControls(){
+      if(AUTO_PLAY_SHIPS){
+        var prevBtn = document.getElementById("shipPrevBtn");
+        var nextBtn = document.getElementById("shipNextBtn");
+        var toggleBtn = document.getElementById("shipPlayToggle");
+        if(prevBtn) prevBtn.addEventListener("click", function(){
+          shipCountdownSec = SHIP_PLAY_INTERVAL_SEC;
+          stepVisibleShip(-1);
+          updateShipPlayBarUI();
+        });
+        if(nextBtn) nextBtn.addEventListener("click", function(){
+          shipCountdownSec = SHIP_PLAY_INTERVAL_SEC;
+          stepVisibleShip(1);
+          updateShipPlayBarUI();
+        });
+        if(toggleBtn) toggleBtn.addEventListener("click", function(){
+          shipPlayPaused = !shipPlayPaused;
+          updateShipPlayBarUI();
+        });
+        updateShipPlayBarUI();
+        setInterval(function(){
+          if(shipPlayPaused || document.querySelector(".modal-mask.open")) return;
+          if(shipManualPauseTicks > 0){
+            shipManualPauseTicks = 0;
+            shipCountdownSec = SHIP_PLAY_INTERVAL_SEC;
+            updateShipPlayBarUI();
+            return;
+          }
+          shipCountdownSec--;
+          if(shipCountdownSec <= 0){
+            shipCountdownSec = SHIP_PLAY_INTERVAL_SEC;
+            stepVisibleShip(1);
+          }
+          updateShipPlayBarUI();
+        }, 1000);
+      }
+
+      /* 将大屏内部触摸/鼠标/按键操作实时通知父窗口（用于展厅5分钟无操作复位计时） */
+      var lastSentAt = 0;
+      function notifyParentActivity(force){
+        var now = Date.now();
+        if(!force && now - lastSentAt < 1000) return;
+        lastSentAt = now;
+        try{
+          if(window.parent && window.parent !== window){
+            window.parent.postMessage({ type: "exhibition_user_activity" }, "*");
+          }
+        }catch(_e){}
+      }
+      ["pointerdown","touchstart","mousedown","wheel","keydown","click"].forEach(function(ev){
+        window.addEventListener(ev, function(){ notifyParentActivity(true); }, { passive: true });
+      });
+      ["mousemove","touchmove"].forEach(function(ev){
+        window.addEventListener(ev, function(){ notifyParentActivity(false); }, { passive: true });
+      });
+    })();
 
     /* ---------------- 初始化 ---------------- */
     buildSpaces();

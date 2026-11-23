@@ -24,15 +24,18 @@ import {
   Layers,
   SlidersHorizontal,
   Tv,
-  ClipboardCheck
+  ClipboardCheck,
+  MonitorPlay,
+  Presentation
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { ViewType } from '@/src/types';
+import { getEffectiveMenuPermissions } from '@/src/data/userManagementData';
 
 interface SidebarProps {
   currentView: ViewType;
   onChangeView: (view: ViewType) => void;
-  currentUser?: { username: string; role: string; name: string };
+  currentUser?: { username: string; role: string; name: string; menuPermissions?: ViewType[]; defaultView?: ViewType };
   onLogout?: () => void;
 }
 
@@ -124,6 +127,15 @@ const MENU_STRUCTURE: MenuItem[] = [
       { id: 'user_mgmt', label: '用户管理', icon: UserCog },
     ] 
   },
+  {
+    id: 'exhibition',
+    label: '展厅展示',
+    icon: MonitorPlay,
+    children: [
+      { id: 'exhibition_dashboard', label: '驾驶舱（展示）', icon: Presentation },
+      { id: 'exhibition_workface', label: '作业看板（展示）', icon: Tv },
+    ]
+  },
 ];
 
 // 根据当前视图查找归属的一级菜单ID
@@ -192,7 +204,20 @@ export function Sidebar({ currentView, onChangeView, currentUser, onLogout }: Si
         </div>
 
         <nav className="space-y-1 mt-1">
-          {MENU_STRUCTURE.map((menu) => {
+          {(() => {
+            const allowedPerms = getEffectiveMenuPermissions(currentUser);
+            return MENU_STRUCTURE.map(menu => {
+              if (menu.viewId) {
+                return allowedPerms.includes(menu.viewId) ? menu : null;
+              }
+              if (menu.children) {
+                const visibleChildren = menu.children.filter(c => allowedPerms.includes(c.id));
+                if (visibleChildren.length === 0) return null;
+                return { ...menu, children: visibleChildren };
+              }
+              return menu;
+            }).filter((m): m is MenuItem => m !== null);
+          })().map((menu) => {
             const hasChildren = Boolean(menu.children && menu.children.length > 0);
             const isOpen = openMenuId === menu.id;
             const isDirectActive = menu.viewId === currentView;

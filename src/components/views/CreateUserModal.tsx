@@ -21,8 +21,9 @@ import {
   Sparkles
 } from 'lucide-react';
 import { DhrPersonnelItem, INITIAL_PERSONNEL_ITEMS } from '@/src/data/dhrPersonnelData';
-import { SystemUser, SystemUserRole } from '@/src/data/userManagementData';
+import { SystemUser, SystemUserRole, ROLE_MENU_DEFAULTS } from '@/src/data/userManagementData';
 import { getStoredDepartments, flattenDepartments } from '@/src/data/departmentData';
+import { ViewType } from '@/src/types';
 
 interface CreateUserModalProps {
   isOpen: boolean;
@@ -64,6 +65,8 @@ export function CreateUserModal({
   const [deptName, setDeptName] = useState(editingUser?.deptName || '安全环保部门');
   const [phonenumber, setPhonenumber] = useState(editingUser?.phonenumber || editingUser?.phone || '');
   const [password, setPassword] = useState('123456');
+  const [role, setRole] = useState<SystemUserRole>(editingUser?.role || '造船项目管理员');
+  const [defaultView, setDefaultView] = useState<ViewType>(editingUser?.defaultView || 'dashboard');
   const [status, setStatus] = useState<'0' | '1'>(() => {
     if (editingUser) {
       return (editingUser.status === '1' || editingUser.status === 'disabled') ? '1' : '0';
@@ -116,6 +119,10 @@ export function CreateUserModal({
       return;
     }
 
+    const preset = ROLE_MENU_DEFAULTS[role] || ROLE_MENU_DEFAULTS['造船项目管理员'];
+    const basePerms = editingUser?.menuPermissions?.length ? editingUser.menuPermissions : preset.menuPermissions;
+    const ensuredPerms = basePerms.includes(defaultView) ? basePerms : Array.from(new Set([...basePerms, defaultView]));
+
     onSave({
       userName: userName.trim(),
       username: userName.trim(),
@@ -126,7 +133,9 @@ export function CreateUserModal({
       phone: phonenumber.trim(),
       status: status,
       password: password,
-      role: (editingUser?.role || '造船项目管理员') as SystemUserRole,
+      role,
+      menuPermissions: ensuredPerms,
+      defaultView,
       remarks: editingUser?.remarks || '平台登录账号'
     });
 
@@ -347,6 +356,43 @@ export function CreateUserModal({
                 </label>
               </div>
               <span className="text-[10px] text-slate-400">停用后该账号将无法登录系统</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3.5 pt-1 border-t border-slate-100">
+            <div className="space-y-1">
+              <label className="block font-medium text-slate-700">系统角色</label>
+              <select
+                value={role}
+                onChange={e => {
+                  const nextRole = e.target.value as SystemUserRole;
+                  setRole(nextRole);
+                  const preset = ROLE_MENU_DEFAULTS[nextRole];
+                  if (preset) setDefaultView(preset.defaultView);
+                }}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:border-blue-500 text-xs bg-white"
+              >
+                {(Object.keys(ROLE_MENU_DEFAULTS) as SystemUserRole[]).map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+              <span className="text-[10px] text-slate-400">可在列表「权限配置」中精细微调菜单</span>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block font-medium text-slate-700">登录后默认进入</label>
+              <select
+                value={defaultView}
+                onChange={e => setDefaultView(e.target.value as ViewType)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:border-blue-500 text-xs bg-white"
+              >
+                <option value="dashboard">驾驶舱（管理工作台）</option>
+                <option value="exhibition_dashboard">驾驶舱（展示）· 默认全屏</option>
+                <option value="exhibition_workface">作业看板（展示）· 默认全屏</option>
+                <option value="projects">船舶项目</option>
+                <option value="personnel_mgmt">人员管理</option>
+              </select>
+              <span className="text-[10px] text-slate-400">支持配置登录后直达展厅独立全屏</span>
             </div>
           </div>
 

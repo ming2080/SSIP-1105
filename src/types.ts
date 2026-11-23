@@ -18,7 +18,9 @@ export type ViewType =
   | 'workface'
   | 'workface_monitor'
   | 'workface_config'
-  | 'workface_screen';
+  | 'workface_screen'
+  | 'exhibition_dashboard'
+  | 'exhibition_workface';
 
 export interface Project {
   id: string;

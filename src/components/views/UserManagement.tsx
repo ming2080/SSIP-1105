@@ -27,11 +27,14 @@ import {
   Phone,
   PowerOff,
   Power,
-  Lock
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   SystemUser, 
-  INITIAL_SYSTEM_USERS 
+  SystemUserRole,
+  getStoredSystemUsers,
+  getEffectiveMenuPermissions
 } from '@/src/data/userManagementData';
 import { 
   DepartmentNode, 
@@ -41,6 +44,8 @@ import {
 } from '@/src/data/departmentData';
 import { CreateUserModal } from './CreateUserModal';
 import { ResetPasswordModal } from './ResetPasswordModal';
+import { UserPermissionModal } from './UserPermissionModal';
+import { ViewType } from '@/src/types';
 
 interface UserManagementProps {
   onNavigateToPersonnel?: () => void;
@@ -71,31 +76,7 @@ export function UserManagement({
   }, []);
 
   // 用户列表数据
-  const [userList, setUserList] = useState<SystemUser[]>(() => {
-    try {
-      const saved = localStorage.getItem('shipyard_system_users');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const hasHuangpz = parsed.some(u => (u.userId === 145 || u.userName === 'huangpz' || u.username === 'huangpz'));
-          const normalized = parsed.map((u, idx) => ({
-            userId: u.userId ?? (idx === 0 ? 145 : idx + 1),
-            userName: u.userName || u.username || `user_${idx}`,
-            nickName: u.nickName || u.name || '系统用户',
-            deptName: u.deptName || '安全环保部门',
-            phonenumber: u.phonenumber || u.phone || '',
-            status: (u.status === '1' || u.status === 'disabled') ? '1' : '0',
-            createTime: u.createTime || u.createdAt || '2026-05-06 17:37:04',
-            ...u
-          }));
-          return hasHuangpz ? normalized : [INITIAL_SYSTEM_USERS[0], ...normalized];
-        }
-      }
-      return INITIAL_SYSTEM_USERS;
-    } catch {
-      return INITIAL_SYSTEM_USERS;
-    }
-  });
+  const [userList, setUserList] = useState<SystemUser[]>(() => getStoredSystemUsers());
 
   // 查询过滤条件
   const [queryUserName, setQueryUserName] = useState('');
@@ -110,12 +91,40 @@ export function UserManagement({
   const [isResetPwdModalOpen, setIsResetPwdModalOpen] = useState(false);
   const [resetPwdUser, setResetPwdUser] = useState<SystemUser | null>(null);
 
+  // 权限配置弹窗状态
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
+  const [permissionUser, setPermissionUser] = useState<SystemUser | null>(null);
+
   // 消息提示轻量 Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const syncCurrentSessionIfMatched = (updatedUsers: SystemUser[]) => {
+    try {
+      const rawSession = localStorage.getItem('shipyard_session_user');
+      if (!rawSession) return;
+      const session = JSON.parse(rawSession);
+      const matched = updatedUsers.find(
+        u => (u.userName || u.username) === session.username
+      );
+      if (matched) {
+        const nextSession = {
+          ...session,
+          role: matched.role || session.role,
+          name: matched.nickName || matched.name || session.name,
+          menuPermissions: getEffectiveMenuPermissions(matched),
+          defaultView: matched.defaultView || session.defaultView
+        };
+        localStorage.setItem('shipyard_session_user', JSON.stringify(nextSession));
+        window.dispatchEvent(new CustomEvent('session_permissions_updated', { detail: nextSession }));
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const saveUsers = (newList: SystemUser[]) => {
@@ -125,6 +134,7 @@ export function UserManagement({
     } catch {
       // ignore
     }
+    syncCurrentSessionIfMatched(newList);
   };
 
   // 重置搜索表单
@@ -226,6 +236,27 @@ export function UserManagement({
 
     saveUsers(updatedList);
     showToast(`用户【${resetPwdUser?.userName}】登录密码已重置成功！`);
+  };
+
+  // 保存用户菜单权限与默认首页配置
+  const handleSavePermissions = (
+    userId: number | string,
+    payload: { role: SystemUserRole; menuPermissions: ViewType[]; defaultView: ViewType }
+  ) => {
+    const updatedList = userList.map(u => {
+      const isMatch = (u.userId !== undefined && u.userId === userId) || u.userName === userId;
+      if (isMatch) {
+        return {
+          ...u,
+          role: payload.role,
+          menuPermissions: payload.menuPermissions,
+          defaultView: payload.defaultView
+        };
+      }
+      return u;
+    });
+    saveUsers(updatedList);
+    showToast(`已更新【${permissionUser?.nickName || permissionUser?.userName}】的菜单权限配置`);
   };
 
   // 递归查找选中的部门名称及所有子部门
@@ -564,9 +595,22 @@ export function UserManagement({
                             {cTime}
                           </td>
 
-                          {/* 8. 操作 (修改、重置密码、启用/停用；已按要求去除删除功能) */}
+                          {/* 8. 操作 (权限配置、修改、重置密码、启用/停用；已按要求去除删除功能) */}
                           <td className="py-3 px-4 text-right pr-4 whitespace-nowrap">
                             <div className="flex items-center justify-end gap-2.5 text-xs font-medium">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPermissionUser(user);
+                                  setIsPermissionModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                                title="配置菜单访问权限与默认页面"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                <span>权限配置</span>
+                              </button>
+
                               <button
                                 type="button"
                                 onClick={() => {
@@ -639,6 +683,17 @@ export function UserManagement({
           setResetPwdUser(null);
         }}
         onConfirm={handleConfirmResetPassword}
+      />
+
+      {/* 权限配置弹窗 */}
+      <UserPermissionModal
+        isOpen={isPermissionModalOpen}
+        user={permissionUser}
+        onClose={() => {
+          setIsPermissionModalOpen(false);
+          setPermissionUser(null);
+        }}
+        onSave={handleSavePermissions}
       />
 
     </div>

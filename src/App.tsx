@@ -7,11 +7,14 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from './components/layout/Layout';
 import { Login } from './components/views/Login';
 import { MobileAlarmApp } from './components/mobile/MobileAlarmApp';
+import { ViewType } from './types';
 
 export interface UserSession {
   username: string;
   role: string;
   name: string;
+  menuPermissions?: ViewType[];
+  defaultView?: ViewType;
 }
 
 export default function App() {
@@ -64,9 +67,26 @@ export default function App() {
     return () => window.removeEventListener('app_logout', handleGlobalLogout);
   }, []);
 
-  const handleLogin = (userInfo?: any) => {
+  // 监听当前登录用户权限配置实时变更
+  useEffect(() => {
+    const handleSessionPermUpdated = (e: any) => {
+      if (e.detail && typeof e.detail.username === 'string') {
+        setCurrentUser(e.detail);
+      }
+    };
+    window.addEventListener('session_permissions_updated', handleSessionPermUpdated);
+    return () => window.removeEventListener('session_permissions_updated', handleSessionPermUpdated);
+  }, []);
+
+  const handleLogin = (userInfo?: Partial<UserSession>) => {
     const user: UserSession = (userInfo && typeof userInfo.username === 'string')
-      ? { username: userInfo.username, role: userInfo.role || '系统管理员', name: userInfo.name || '张工 (系统管理员)' }
+      ? {
+          username: userInfo.username,
+          role: userInfo.role || '系统管理员',
+          name: userInfo.name || '张工 (系统管理员)',
+          menuPermissions: userInfo.menuPermissions,
+          defaultView: userInfo.defaultView
+        }
       : { 
           username: 'admin', 
           role: '系统管理员', 

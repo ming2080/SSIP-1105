@@ -7,9 +7,22 @@ import {
   ArrowRight, 
   AlertTriangle
 } from 'lucide-react';
+import { ViewType } from '@/src/types';
+import {
+  getStoredSystemUsers,
+  getEffectiveMenuPermissions,
+  getEffectiveDefaultView,
+  ROLE_MENU_DEFAULTS
+} from '@/src/data/userManagementData';
 
 interface LoginProps {
-  onLogin: (userInfo?: { username: string; role: string; name: string }) => void;
+  onLogin: (userInfo?: {
+    username: string;
+    role: string;
+    name: string;
+    menuPermissions?: ViewType[];
+    defaultView?: ViewType;
+  }) => void;
 }
 
 // 智慧船厂现场 IoT 传感器与数字孪生空间节点配置
@@ -149,25 +162,61 @@ export function Login({ onLogin }: LoginProps) {
       localStorage.removeItem('shipyard_remembered_user');
     }
 
-    // 鉴权延迟模拟与角色分配
+    // 鉴权延迟模拟与角色/权限分配（优先读取用户管理中的自定义账号权限配置）
     setTimeout(() => {
       setIsLoading(false);
-      let role = '系统管理员';
-      let name = '张工 (系统管理员)';
+      const trimmedUser = username.trim();
+      const storedUsers = getStoredSystemUsers();
+      const matchedUser = storedUsers.find(
+        u => (u.userName || u.username || '').toLowerCase() === trimmedUser.toLowerCase()
+      );
 
-      const lower = username.toLowerCase();
-      if (lower.includes('safe') || username.includes('安全')) {
-        role = '安全总监';
-        name = '陈志强 (安全总监)';
-      } else if (lower.includes('inspect') || username.includes('巡检')) {
-        role = '当班安全员';
-        name = '李伟 (当班安全员)';
-      } else if (lower.includes('remote') || username.includes('远程')) {
-        role = '远程安全员';
-        name = '王敏 (远程安全员)';
+      if (matchedUser) {
+        if (matchedUser.status === '1' || matchedUser.status === 'disabled') {
+          setErrorMessage('该账号已被停用，请联系管理员启用后再登录');
+          return;
+        }
+        const expectedPwd = matchedUser.password || '123456';
+        if (password.trim() !== expectedPwd && password.trim() !== '123456') {
+          setErrorMessage('登录口令不正确');
+          return;
+        }
+        onLogin({
+          username: matchedUser.userName || matchedUser.username || trimmedUser,
+          role: matchedUser.role || '系统管理员',
+          name: `${matchedUser.nickName || matchedUser.name || trimmedUser} (${matchedUser.role || '系统用户'})`,
+          menuPermissions: getEffectiveMenuPermissions(matchedUser),
+          defaultView: getEffectiveDefaultView(matchedUser)
+        });
+        return;
       }
 
-      onLogin({ username: username.trim(), role, name });
+      let role = '系统管理员';
+      let name = '张工 (系统管理员)';
+      let menuPermissions = ROLE_MENU_DEFAULTS['系统管理员'].menuPermissions;
+      let defaultView: ViewType = 'dashboard';
+
+      const lower = trimmedUser.toLowerCase();
+      if (lower.includes('exhibition') || trimmedUser.includes('展厅')) {
+        role = '展厅展示员';
+        name = '主楼展厅大屏 (展厅展示员)';
+        menuPermissions = ROLE_MENU_DEFAULTS['展厅展示员'].menuPermissions;
+        defaultView = 'exhibition_dashboard';
+      } else if (lower.includes('safe') || trimmedUser.includes('安全')) {
+        role = '安环巡检员';
+        name = '陈志强 (安全总监)';
+        menuPermissions = ROLE_MENU_DEFAULTS['安环巡检员'].menuPermissions;
+      } else if (lower.includes('inspect') || trimmedUser.includes('巡检')) {
+        role = '安环巡检员';
+        name = '李伟 (当班安全员)';
+        menuPermissions = ROLE_MENU_DEFAULTS['安环巡检员'].menuPermissions;
+      } else if (lower.includes('remote') || trimmedUser.includes('远程')) {
+        role = '安环巡检员';
+        name = '王敏 (远程安全员)';
+        menuPermissions = ROLE_MENU_DEFAULTS['安环巡检员'].menuPermissions;
+      }
+
+      onLogin({ username: trimmedUser, role, name, menuPermissions, defaultView });
     }, 450);
   };
 
@@ -609,11 +658,11 @@ export function Login({ onLogin }: LoginProps) {
               <div className="text-xs text-slate-600 mb-2 font-medium">
                 体验演示账号（点击快速登入）：
               </div>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-1.5">
                 <button
                   type="button"
                   onClick={() => handleQuickFill('admin', '123456')}
-                  className={`py-1.5 px-1 rounded-md text-xs font-medium transition-all cursor-pointer border text-center ${
+                  className={`py-1.5 px-1 rounded-md text-[11px] font-medium transition-all cursor-pointer border text-center ${
                     username === 'admin' 
                       ? 'bg-blue-50 text-blue-600 border-blue-400 font-bold shadow-2xs' 
                       : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
@@ -623,8 +672,20 @@ export function Login({ onLogin }: LoginProps) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => handleQuickFill('exhibition', '123456')}
+                  className={`py-1.5 px-1 rounded-md text-[11px] font-medium transition-all cursor-pointer border text-center ${
+                    username === 'exhibition' 
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-400 font-bold shadow-2xs' 
+                      : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
+                  }`}
+                  title="展厅专用账号：登录后默认独立全屏进入驾驶舱（展示）"
+                >
+                  展厅大屏
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleQuickFill('safety', '123456')}
-                  className={`py-1.5 px-1 rounded-md text-xs font-medium transition-all cursor-pointer border text-center ${
+                  className={`py-1.5 px-1 rounded-md text-[11px] font-medium transition-all cursor-pointer border text-center ${
                     username === 'safety' 
                       ? 'bg-blue-50 text-blue-600 border-blue-400 font-bold shadow-2xs' 
                       : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
@@ -635,7 +696,7 @@ export function Login({ onLogin }: LoginProps) {
                 <button
                   type="button"
                   onClick={() => handleQuickFill('inspector', '123456')}
-                  className={`py-1.5 px-1 rounded-md text-xs font-medium transition-all cursor-pointer border text-center ${
+                  className={`py-1.5 px-1 rounded-md text-[11px] font-medium transition-all cursor-pointer border text-center ${
                     username === 'inspector' 
                       ? 'bg-blue-50 text-blue-600 border-blue-400 font-bold shadow-2xs' 
                       : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
@@ -646,7 +707,7 @@ export function Login({ onLogin }: LoginProps) {
                 <button
                   type="button"
                   onClick={() => handleQuickFill('remote_safe', '123456')}
-                  className={`py-1.5 px-1 rounded-md text-xs font-medium transition-all cursor-pointer border text-center ${
+                  className={`py-1.5 px-1 rounded-md text-[11px] font-medium transition-all cursor-pointer border text-center ${
                     username === 'remote_safe' 
                       ? 'bg-blue-50 text-blue-600 border-blue-400 font-bold shadow-2xs' 
                       : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'

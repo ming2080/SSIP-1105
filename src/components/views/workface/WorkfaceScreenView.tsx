@@ -4,10 +4,10 @@
  * 
  * 智慧船厂 - 作业面大屏视图
  * 对应源码路径: src/yxkj-v8.html
- * 涵盖：有限空间与重点区域大屏安全监控系统、默认全屏显示、真实全屏切换、新窗口独立打开、返回控制台与配置台账联动
+ * 支持普通控制台大屏与展厅展示（默认全屏不退出、仅码头船舶项目自动轮播、与驾驶舱触摸互切）
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Maximize2, 
   Minimize2, 
@@ -24,13 +24,20 @@ export interface WorkfaceScreenViewProps {
   onNavigateToConfig?: () => void;
   onNavigateToMonitor?: () => void;
   onNavigateToDashboard?: () => void;
+  exhibitionMode?: boolean;
+  pierOnly?: boolean;
+  autoPlayShips?: boolean;
+  onSwitchToDashboard?: () => void;
 }
 
 export function WorkfaceScreenView({
   onExit,
   onNavigateToConfig,
-  onNavigateToMonitor,
-  onNavigateToDashboard
+  onNavigateToDashboard,
+  exhibitionMode = false,
+  pierOnly = false,
+  autoPlayShips = false,
+  onSwitchToDashboard
 }: WorkfaceScreenViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -39,8 +46,19 @@ export function WorkfaceScreenView({
   const [showExitHint, setShowExitHint] = useState(true);
   const [iframeKey, setIframeKey] = useState<number>(() => Date.now());
 
-  // 退出并返回原系统页面
+  const iframeSrc = useMemo(() => {
+    const params = new URLSearchParams();
+    if (exhibitionMode) params.set('exhibition', '1');
+    if (pierOnly || exhibitionMode) params.set('pierOnly', '1');
+    if (autoPlayShips || exhibitionMode) params.set('autoPlayShips', '1');
+    if (exhibitionMode) params.set('hideTopFs', '1');
+    params.set('t', String(iframeKey));
+    return `/yxkj-v8.html?${params.toString()}`;
+  }, [exhibitionMode, pierOnly, autoPlayShips, iframeKey]);
+
+  // 退出并返回原系统页面（仅非展厅模式下允许）
   const handleExit = useCallback(() => {
+    if (exhibitionMode) return;
     try {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
@@ -54,11 +72,10 @@ export function WorkfaceScreenView({
     } else if (onNavigateToConfig) {
       onNavigateToConfig();
     }
-  }, [onExit, onNavigateToDashboard, onNavigateToConfig]);
+  }, [exhibitionMode, onExit, onNavigateToDashboard, onNavigateToConfig]);
 
   // 打开时默认为全屏显示 (既有 100vw x 100vh 满屏，也主动触发原生全屏)
   useEffect(() => {
-    let timer: any = null;
     const requestAutoFullscreen = async () => {
       try {
         if (!document.fullscreenElement) {
@@ -70,26 +87,17 @@ export function WorkfaceScreenView({
             await document.documentElement.requestFullscreen();
           }
         }
-      } catch (err) {
+      } catch {
         // 浏览器若因无前置交互阻止自动原生全屏，组件本身已采取 fixed inset-0 100vw x 100vh 沉浸式占满全屏
       }
     };
 
-    // 延迟 60ms 确保容器完全挂载渲染就绪
-    timer = setTimeout(requestAutoFullscreen, 60);
-
-    // 1.2秒超时强制隐藏 loading，保障 iframe 顺畅呈现
-    const loadTimer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1200);
-
-    // 3.5秒后自动淡出退出提示
-    const hintTimer = setTimeout(() => {
-      setShowExitHint(false);
-    }, 3500);
+    const timer = setTimeout(requestAutoFullscreen, 60);
+    const loadTimer = setTimeout(() => setIsLoading(false), 1200);
+    const hintTimer = setTimeout(() => setShowExitHint(false), 3500);
 
     return () => {
-      if (timer) clearTimeout(timer);
+      clearTimeout(timer);
       clearTimeout(loadTimer);
       clearTimeout(hintTimer);
     };
@@ -108,11 +116,11 @@ export function WorkfaceScreenView({
     };
   }, []);
 
-  // 快捷键监听：ESC 退出大屏模式
+  // 快捷键监听：普通模式 ESC 退出大屏；展厅展示模式默认大屏不退出系统
   useEffect(() => {
+    if (exhibitionMode) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // 当未处于浏览器原生全屏状态（或原生全屏退出后），再次按 ESC 或初次按 ESC 可直接返回系统后台
         if (!document.fullscreenElement) {
           handleExit();
         }
@@ -120,9 +128,8 @@ export function WorkfaceScreenView({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleExit]);
+  }, [exhibitionMode, handleExit]);
 
-  // 切换原生全屏
   const handleToggleFullscreen = () => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
@@ -131,24 +138,18 @@ export function WorkfaceScreenView({
       } else if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
       }
-    } else {
+    } else if (!exhibitionMode) {
       document.exitFullscreen().catch(() => {});
     }
   };
 
-  // 刷新大屏
   const handleReload = () => {
     setIsLoading(true);
-    const newKey = Date.now();
-    setIframeKey(newKey);
-    if (iframeRef.current) {
-      iframeRef.current.src = `/yxkj-v8.html?t=${newKey}`;
-    }
+    setIframeKey(Date.now());
   };
 
-  // 新窗口独立打开
   const handleOpenNewTab = () => {
-    window.open(`/yxkj-v8.html?t=${Date.now()}`, '_blank');
+    window.open(iframeSrc, '_blank');
   };
 
   return (
@@ -156,79 +157,101 @@ export function WorkfaceScreenView({
       ref={containerRef}
       className="fixed inset-0 w-screen h-screen z-50 flex flex-col bg-[#00060f] overflow-hidden select-none"
     >
-      {/* 顶部悬浮控制栏 (极简半透明玻璃拟态胶囊) */}
-      <div className="absolute top-3 right-4 z-40 flex items-center gap-2 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-cyan-500/40 shadow-[0_4px_24px_rgba(0,0,0,0.8),0_0_15px_rgba(0,229,255,0.25)] transition-all hover:bg-slate-900/98">
-        
-        {/* 系统标题徽标 */}
-        <div className="flex items-center gap-1.5 pr-2.5 border-r border-slate-700/80">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00e5ff]" />
-          <span className="text-xs font-bold text-cyan-300 font-mono tracking-wider flex items-center gap-1.5">
-            <Tv className="w-3.5 h-3.5 text-cyan-400" />
-            <span>作业看板 · 全屏监控</span>
-          </span>
-        </div>
+      {/* 顶部悬浮控制栏：普通模式显示完整返回控制台；展厅双屏切换模式提供大触控热区切换驾驶舱；独立作业看板展示模式不退出大屏 */}
+      {!exhibitionMode ? (
+        <div className="absolute top-3 right-4 z-40 flex items-center gap-2 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-cyan-500/40 shadow-[0_4px_24px_rgba(0,0,0,0.8),0_0_15px_rgba(0,229,255,0.25)] transition-all hover:bg-slate-900/98">
+          <div className="flex items-center gap-1.5 pr-2.5 border-r border-slate-700/80">
+            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00e5ff]" />
+            <span className="text-xs font-bold text-cyan-300 font-mono tracking-wider flex items-center gap-1.5">
+              <Tv className="w-3.5 h-3.5 text-cyan-400" />
+              <span>作业看板 · 全屏监控</span>
+            </span>
+          </div>
 
-        {/* 切换全屏 / 窗口 */}
-        <button
-          type="button"
-          onClick={handleToggleFullscreen}
-          className="flex items-center gap-1 px-2 py-1 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 rounded-full text-xs font-medium transition-colors cursor-pointer"
-          title={isFullscreen ? '退出原生全屏' : '进入原生全屏模式'}
-        >
-          {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-cyan-400" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          <span className="hidden sm:inline text-[11px]">{isFullscreen ? '退出全屏' : '全屏'}</span>
-        </button>
-
-        {/* 刷新大屏数据 */}
-        <button
-          type="button"
-          onClick={handleReload}
-          className="p-1 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 rounded-full transition-colors cursor-pointer"
-          title="重新载入大屏数据"
-        >
-          <RotateCw className="w-3.5 h-3.5" />
-        </button>
-
-        {/* 新标签页独立打开 */}
-        <button
-          type="button"
-          onClick={handleOpenNewTab}
-          className="p-1 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 rounded-full transition-colors cursor-pointer"
-          title="在新浏览器标签页中打开独立大屏"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </button>
-
-        {/* 返回区域划分台账 */}
-        {onNavigateToConfig && (
           <button
             type="button"
-            onClick={onNavigateToConfig}
-            className="flex items-center gap-1 px-2 py-1 border-l border-slate-700/80 text-[11px] font-medium text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-            title="返回区域划分台账"
+            onClick={handleToggleFullscreen}
+            className="flex items-center gap-1 px-2 py-1 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 rounded-full text-xs font-medium transition-colors cursor-pointer"
+            title={isFullscreen ? '退出原生全屏' : '进入原生全屏模式'}
           >
-            <SlidersHorizontal className="w-3 h-3 text-blue-400" />
-            <span className="hidden sm:inline">区域划分</span>
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-cyan-400" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline text-[11px]">{isFullscreen ? '退出全屏' : '全屏'}</span>
           </button>
-        )}
 
-        {/* 退出大屏 / 返回控制台 */}
-        <button
-          type="button"
-          onClick={handleExit}
-          className="flex items-center gap-1.5 pl-2.5 pr-2 py-1 border-l border-slate-700/80 text-xs font-bold text-amber-300 hover:text-amber-200 hover:bg-amber-500/15 rounded-full transition-colors cursor-pointer"
-          title="退出大屏模式，返回业务控制台 (快捷键 ESC)"
-        >
-          <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
-          <span>返回控制台</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={handleReload}
+            className="p-1 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 rounded-full transition-colors cursor-pointer"
+            title="重新载入大屏数据"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenNewTab}
+            className="p-1 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 rounded-full transition-colors cursor-pointer"
+            title="在新浏览器标签页中打开独立大屏"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+
+          {onNavigateToConfig && (
+            <button
+              type="button"
+              onClick={onNavigateToConfig}
+              className="flex items-center gap-1 px-2 py-1 border-l border-slate-700/80 text-[11px] font-medium text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+              title="返回区域划分台账"
+            >
+              <SlidersHorizontal className="w-3 h-3 text-blue-400" />
+              <span className="hidden sm:inline">区域划分</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleExit}
+            className="flex items-center gap-1.5 pl-2.5 pr-2 py-1 border-l border-slate-700/80 text-xs font-bold text-amber-300 hover:text-amber-200 hover:bg-amber-500/15 rounded-full transition-colors cursor-pointer"
+            title="退出大屏模式，返回业务控制台 (快捷键 ESC)"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
+            <span>返回控制台</span>
+          </button>
+        </div>
+      ) : (
+        <div className="absolute top-3 right-4 z-40 flex items-center gap-2 bg-[#03152d]/90 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-cyan-400/45 shadow-[0_6px_28px_rgba(0,0,0,0.85),0_0_16px_rgba(0,210,255,0.28)]">
+          {onSwitchToDashboard && (
+            <button
+              type="button"
+              onClick={onSwitchToDashboard}
+              className="flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-xs font-extrabold tracking-wide shadow-[0_0_16px_rgba(0,210,255,0.55)] active:scale-95 transition-all cursor-pointer"
+              title="触摸切换回驾驶舱独立全屏视图"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              <span>切换驾驶舱</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleReload}
+            className="p-2 min-h-[38px] min-w-[38px] flex items-center justify-center text-cyan-200 hover:text-white hover:bg-cyan-500/20 rounded-full transition-colors cursor-pointer"
+            title="刷新大屏数据"
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* 顶部中央淡入浮动操作指引提示 */}
       {showExitHint && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-slate-900/90 border border-cyan-500/40 text-cyan-200 text-xs px-4 py-1.5 rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 animate-fadeIn pointer-events-none">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-          <span>已进入作业面全屏大屏监控 · 按 <b>ESC</b> 键或点击右上角可随时退出返回</span>
+          <span>
+            {exhibitionMode
+              ? '已进入展厅全屏作业看板 · 仅显示部署码头船舶项目并自动轮播切换'
+              : <>已进入作业面全屏大屏监控 · 按 <b>ESC</b> 键或点击右上角可随时退出返回</>}
+          </span>
         </div>
       )}
 
@@ -244,7 +267,9 @@ export function WorkfaceScreenView({
             正在载入智慧船厂在建船舶安全监控系统...
           </div>
           <div className="text-xs text-cyan-400/70 font-mono mt-1.5">
-            全屏 1920x1080 空间数字孪生监控大盘 · SOURCE: yxkj-v8.html
+            {exhibitionMode
+              ? '展厅独立全屏展示大盘 · 部署码头船舶自动轮播'
+              : '全屏 1920x1080 空间数字孪生监控大盘'}
           </div>
         </div>
       )}
@@ -253,7 +278,7 @@ export function WorkfaceScreenView({
       <iframe
         key={iframeKey}
         ref={iframeRef}
-        src={`/yxkj-v8.html?t=${iframeKey}`}
+        src={iframeSrc}
         onLoad={() => setIsLoading(false)}
         className="w-full h-full border-0 bg-[#00060f] flex-1"
         title="智慧船厂在建船舶安全监控系统"

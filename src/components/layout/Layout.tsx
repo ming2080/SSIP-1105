@@ -20,16 +20,25 @@ import { OvertimeManagement } from '../views/OvertimeManagement';
 import { WorkfaceManagement } from '../views/workface/WorkfaceManagement';
 import { WorkfaceMonitorAnalytics } from '../views/workface/WorkfaceMonitorAnalytics';
 import { WorkfaceScreenView } from '../views/workface/WorkfaceScreenView';
+import { ExhibitionDashboardView } from '../views/exhibition/ExhibitionDashboardView';
 import { FullScreenAlarmMonitor } from '../views/fullscreen/FullScreenAlarmMonitor';
+import { getEffectiveDefaultView, getEffectiveMenuPermissions } from '@/src/data/userManagementData';
 
 interface LayoutProps {
-  currentUser?: { username: string; role: string; name: string };
+  currentUser?: { username: string; role: string; name: string; menuPermissions?: ViewType[]; defaultView?: ViewType };
   onLogout?: () => void;
 }
 
 export function Layout({ currentUser, onLogout }: LayoutProps = {}) {
-  const [currentView, setCurrentView] = useState<ViewType>('dashboard');
+  const [currentView, setCurrentView] = useState<ViewType>(() => getEffectiveDefaultView(currentUser));
   const [previousView, setPreviousView] = useState<ViewType>('dashboard');
+
+  useEffect(() => {
+    const allowed = getEffectiveMenuPermissions(currentUser);
+    if (!allowed.includes(currentView)) {
+      setCurrentView(getEffectiveDefaultView(currentUser));
+    }
+  }, [currentUser, currentView]);
   const [personnelNavState, setPersonnelNavState] = useState<{ personId?: string; autoPlay?: boolean } | null>(null);
   const [dashboardNavState, setDashboardNavState] = useState<{ projectId?: string; viewScope?: 'yard' | 'project' } | null>(null);
   const [selectedEmpForUserCreation, setSelectedEmpForUserCreation] = useState<string | undefined>(undefined);
@@ -192,6 +201,8 @@ export function Layout({ currentUser, onLogout }: LayoutProps = {}) {
       case 'tags': return '定位标签';
       case 'devices': return '物联设备';
       case 'workface_screen': return '作业看板';
+      case 'exhibition_dashboard': return '驾驶舱（展示）';
+      case 'exhibition_workface': return '作业看板（展示）';
       case 'workface_monitor': return '监控分析';
       case 'workface_config': return '区域划分';
       case 'workface': return '区域划分';
@@ -207,6 +218,22 @@ export function Layout({ currentUser, onLogout }: LayoutProps = {}) {
     return (
       <FullScreenAlarmMonitor 
         onExit={() => setIsFullScreenMonitor(false)} 
+      />
+    );
+  }
+
+  // 展厅展示 - 驾驶舱（展示）：登录后独立全屏，无返回系统按钮，支持触摸互切作业面大屏与5分钟无操作回厂区首页
+  if (currentView === 'exhibition_dashboard') {
+    return <ExhibitionDashboardView />;
+  }
+
+  // 展厅展示 - 作业看板（展示）：默认大屏模式不退出，默认仅显示部署码头船舶项目并自动轮播切换
+  if (currentView === 'exhibition_workface') {
+    return (
+      <WorkfaceScreenView
+        exhibitionMode={true}
+        pierOnly={true}
+        autoPlayShips={true}
       />
     );
   }
