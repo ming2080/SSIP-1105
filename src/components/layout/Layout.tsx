@@ -224,7 +224,7 @@ export function Layout({ currentUser, onLogout }: LayoutProps = {}) {
 
   // 展厅展示 - 驾驶舱（展示）：登录后独立全屏，无返回系统按钮，支持触摸互切作业面大屏与5分钟无操作回厂区首页
   if (currentView === 'exhibition_dashboard') {
-    return <ExhibitionDashboardView />;
+    return <ExhibitionDashboardView currentUser={currentUser} onLogout={onLogout} />;
   }
 
   // 展厅展示 - 作业看板（展示）：默认大屏模式不退出，默认仅显示部署码头船舶项目并自动轮播切换

@@ -33,6 +33,9 @@ import {
   Ship,
   Building2,
   ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Anchor,
   CheckCircle2,
   ShieldAlert,
@@ -51,9 +54,11 @@ import {
   TrendingUp,
   X,
   Tv,
-  LayoutDashboard
+  LayoutDashboard,
+  Lock
 } from 'lucide-react';
 import { ViewType } from '@/src/types';
+import { getStoredSystemUsers } from '@/src/data/userManagementData';
 
 // 设备细分类型定义 (对应设备管理列表4分类: 主基站、气体探测器、声光报警器、摄像头)
 export type DeviceCategoryType = 'all' | 'main_station' | 'gas_detector' | 'alarm' | 'camera';
@@ -2122,6 +2127,8 @@ interface DashboardProps {
   exhibitionMode?: boolean;
   resetHomeSignal?: number;
   onExhibitionSwitchWorkface?: () => void;
+  currentUser?: { username: string; role: string; name: string };
+  onExhibitionLogout?: () => void;
 }
 
 export function Dashboard({
@@ -2131,7 +2138,9 @@ export function Dashboard({
   initialViewScope,
   exhibitionMode = false,
   resetHomeSignal = 0,
-  onExhibitionSwitchWorkface
+  onExhibitionSwitchWorkface,
+  currentUser,
+  onExhibitionLogout
 }: DashboardProps) {
   // 核心视图切换状态：'yard' (厂区) | 'project' (造船项目)
   const [viewScope, setViewScope] = useState<'yard' | 'project'>(initialViewScope || (initialProjectId ? 'project' : 'yard'));
@@ -2188,6 +2197,94 @@ export function Dashboard({
   const alertsScrollRef = useRef<HTMLDivElement>(null);
   const [isAlertsHovered, setIsAlertsHovered] = useState(false);
 
+  // 展厅展示模式：右上角登录者身份验证退出弹窗状态 & 右下角单独滑出式双屏切换状态
+  const [isExitAuthOpen, setIsExitAuthOpen] = useState(false);
+  const [exitPassword, setExitPassword] = useState('');
+  const [showExitPassword, setShowExitPassword] = useState(false);
+  const [exitAuthError, setExitAuthError] = useState<string | null>(null);
+  const exhibitionUserMenuRef = useRef<HTMLDivElement>(null);
+
+  const [isScreenSwitchOpen, setIsScreenSwitchOpen] = useState(false);
+  const [screenSwitchLastInteractAt, setScreenSwitchLastInteractAt] = useState<number>(0);
+
+  const touchScreenSwitch = () => {
+    setScreenSwitchLastInteractAt(Date.now());
+  };
+
+  // 展厅右下角双屏切换栏：无操作 10 秒后自动滑回右下角收起
+  useEffect(() => {
+    if (!exhibitionMode || !isScreenSwitchOpen) return;
+    const timer = window.setTimeout(() => {
+      setIsScreenSwitchOpen(false);
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [exhibitionMode, isScreenSwitchOpen, screenSwitchLastInteractAt]);
+
+  // 点击外部或按 ESC 关闭身份验证框
+  useEffect(() => {
+    if (!exhibitionMode || !isExitAuthOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exhibitionUserMenuRef.current && !exhibitionUserMenuRef.current.contains(e.target as Node)) {
+        setIsExitAuthOpen(false);
+        setExitPassword('');
+        setExitAuthError(null);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsExitAuthOpen(false);
+        setExitPassword('');
+        setExitAuthError(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [exhibitionMode, isExitAuthOpen]);
+
+  // 展厅展示模式：验证当前登录账号密码后退出至登录页
+  const handleVerifyAndLogout = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmedPwd = exitPassword.trim();
+    if (!trimmedPwd) {
+      setExitAuthError('请输入当前登录账号密码');
+      return;
+    }
+
+    const targetUsername = (currentUser?.username || 'admin').trim().toLowerCase();
+    const storedUsers = getStoredSystemUsers();
+    const matchedUser = storedUsers.find(
+      u => (u.userName || u.username || '').trim().toLowerCase() === targetUsername
+    );
+    const expectedPwd = matchedUser?.password ? matchedUser.password : '123456';
+
+    if (trimmedPwd !== expectedPwd) {
+      setExitAuthError('密码错误，请输入正确的登录账号密码');
+      return;
+    }
+
+    setIsExitAuthOpen(false);
+    setExitPassword('');
+    setExitAuthError(null);
+
+    try {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
+
+    if (onExhibitionLogout) {
+      onExhibitionLogout();
+    } else {
+      window.dispatchEvent(new CustomEvent('app_logout'));
+    }
+  };
+
   // 获取当前选中的造船项目配置
   const currentProject = projectListConfig.find(p => p.id === selectedProjectId) || projectListConfig[0];
 
@@ -2207,6 +2304,10 @@ export function Dashboard({
     setSelectedWorkerCluster(null);
     setActiveAlarmModalData(null);
     setIsAlarmListModalOpen(false);
+    setIsExitAuthOpen(false);
+    setExitPassword('');
+    setExitAuthError(null);
+    setIsScreenSwitchOpen(false);
   }, [exhibitionMode, resetHomeSignal]);
 
   // 时钟更新定时器
@@ -2242,10 +2343,10 @@ export function Dashboard({
     return `${y}-${m}-${d} ${h}:${min}:${s} 星期${week}`;
   };
 
-  // 点击背景图切换面板显隐 (优先保障位于背景图之上的具体组件与定位点位事件，若有打开的弹窗优先关闭弹窗)
+  // 点击背景图：普通模式切换面板显隐；展厅模式下点击屏幕自动滑出/收起底部触控操作栏
   const handleBackgroundClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (selectedDeviceDetail || selectedFenceDetail || selectedWorkerDetail || selectedShipDetail || selectedWorkerCluster || activeAlarmModalData || isAlarmListModalOpen || isProjectDropdownOpen || isSearchTypeDropdownOpen) {
+    if (selectedDeviceDetail || selectedFenceDetail || selectedWorkerDetail || selectedShipDetail || selectedWorkerCluster || activeAlarmModalData || isAlarmListModalOpen || isProjectDropdownOpen || isSearchTypeDropdownOpen || isExitAuthOpen) {
       setIsProjectDropdownOpen(false);
       setIsSearchTypeDropdownOpen(false);
       setSelectedDeviceDetail(null);
@@ -2255,6 +2356,18 @@ export function Dashboard({
       setSelectedWorkerCluster(null);
       setActiveAlarmModalData(null);
       setIsAlarmListModalOpen(false);
+      setIsExitAuthOpen(false);
+      setExitPassword('');
+      setExitAuthError(null);
+      return;
+    }
+    if (exhibitionMode) {
+      setIsPanelsVisible(true);
+      setIsScreenSwitchOpen(prev => {
+        const next = !prev;
+        if (next) touchScreenSwitch();
+        return next;
+      });
       return;
     }
     setIsPanelsVisible(prev => !prev);
@@ -2548,7 +2661,7 @@ export function Dashboard({
       <div 
         onClick={handleBackgroundClick}
         className="absolute inset-0 z-0 overflow-hidden bg-[#020b14] pointer-events-auto cursor-pointer"
-        title="点击空白背景可切换两侧数据面板显隐"
+        title={exhibitionMode ? '轻触屏幕可呼出或收起底部触控操作栏' : '点击空白背景可切换两侧数据面板显隐'}
       >
         {/* 原版静态高清背景图片 (使用宽屏鸟瞰大图及各船型三维外观图) */}
         <img 
@@ -4099,124 +4212,126 @@ export function Dashboard({
             </h1>
           </div>
 
-          {/* “厂区” 与 “造船项目” 视图切换 & 项目下拉选择器 */}
-          <div className="flex items-center gap-3 mt-1.5 whitespace-nowrap relative">
-            
-            {/* 视图双切换胶囊按钮 */}
-            <div className="flex items-center bg-[#071d3d]/90 p-0.5 rounded-full border border-[#1f4a7c] shadow-[0_0_16px_rgba(0,210,255,0.25)]">
-              {/* 厂区视图按钮 */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setViewScope('yard');
-                  setIsProjectDropdownOpen(false);
-                }}
-                className={`px-4 py-1 text-[12px] font-bold tracking-wider transition-all duration-300 rounded-full flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                  viewScope === 'yard'
-                    ? 'text-white bg-gradient-to-r from-blue-600 to-cyan-500 shadow-[0_0_14px_rgba(0,210,255,0.7)]'
-                    : 'text-[#8ab4f8] hover:text-white hover:bg-[#0c315e]/50'
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>厂区全景</span>
-              </button>
+          {/* “厂区” 与 “造船项目” 视图切换 & 项目下拉选择器（普通模式位于顶部；展厅模式下移至厂区今日数据概览上方正中间常驻显示） */}
+          {!exhibitionMode && (
+            <div className="flex items-center gap-3 mt-1.5 whitespace-nowrap relative">
+              
+              {/* 视图双切换胶囊按钮 */}
+              <div className="flex items-center bg-[#071d3d]/90 p-0.5 rounded-full border border-[#1f4a7c] shadow-[0_0_16px_rgba(0,210,255,0.25)]">
+                {/* 厂区视图按钮 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewScope('yard');
+                    setIsProjectDropdownOpen(false);
+                  }}
+                  className={`px-4 py-1 text-[12px] font-bold tracking-wider transition-all duration-300 rounded-full flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                    viewScope === 'yard'
+                      ? 'text-white bg-gradient-to-r from-blue-600 to-cyan-500 shadow-[0_0_14px_rgba(0,210,255,0.7)]'
+                      : 'text-[#8ab4f8] hover:text-white hover:bg-[#0c315e]/50'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>厂区全景</span>
+                </button>
 
-              {/* 造船项目视图按钮 */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setViewScope('project');
-                  setShowModelLevelMenu(true);
-                }}
-                className={`px-4 py-1 text-[12px] font-bold tracking-wider transition-all duration-300 rounded-full flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                  viewScope === 'project'
-                    ? 'text-white bg-gradient-to-r from-blue-600 to-cyan-500 shadow-[0_0_14px_rgba(0,210,255,0.7)]'
-                    : 'text-[#8ab4f8] hover:text-white hover:bg-[#0c315e]/50'
-                }`}
-              >
-                <Ship className="w-3.5 h-3.5" />
-                <span>造船项目</span>
-              </button>
-            </div>
-
-            {/* 当处于“造船项目”视图时，调取项目管理中的项目名称列表供实时切换 (模型分层选择已移至图层控制) */}
-            {viewScope === 'project' && (
-              <div className="flex items-center gap-2">
-                {/* 1. 项目选择器 */}
-                <div className="relative">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsProjectDropdownOpen(!isProjectDropdownOpen);
-                    }}
-                    className="flex items-center gap-2 bg-[#0a264a]/90 hover:bg-[#0f3466] border border-[#00d2ff]/80 px-3.5 py-1 rounded-full text-xs text-[#e2f1ff] shadow-[0_0_14px_rgba(0,210,255,0.35)] transition-all duration-200 cursor-pointer"
-                  >
-                    <Anchor className="w-3 h-3 text-[#00d2ff]" />
-                    <span className="font-bold text-[#00d2ff]">{currentProject.name}</span>
-                    <ChevronDown className={`w-3.5 h-3.5 text-[#00d2ff] transition-transform duration-200 ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {/* 项目下拉选择弹窗菜单 */}
-                  {isProjectDropdownOpen && (
-                    <div 
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-full mt-1.5 left-0 w-80 bg-[#061833]/95 border border-[#00d2ff] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8),0_0_20px_rgba(0,210,255,0.4)] backdrop-blur-xl p-2 z-50 animate-fadeIn"
-                    >
-                      <div className="text-[10px] font-bold text-[#8ab4f8] px-2.5 py-1 uppercase tracking-wider border-b border-[#1f4a7c]/60 mb-1 flex items-center justify-between">
-                        <span>选择造船项目模型</span>
-                        <span className="text-[#00d2ff]">共 {projectListConfig.length} 个在建项目</span>
-                      </div>
-
-                      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
-                        {projectListConfig.map((prj) => {
-                          const isSelected = prj.id === selectedProjectId;
-                          return (
-                            <div
-                              key={prj.id}
-                              onClick={() => {
-                                setSelectedProjectId(prj.id);
-                                setIsProjectDropdownOpen(false);
-                              }}
-                              className={`p-2 rounded-xl cursor-pointer transition-all flex items-center justify-between ${
-                                isSelected
-                                  ? 'bg-gradient-to-r from-[#19528f]/90 to-[#0c315e]/90 border border-[#00d2ff] shadow-[0_0_12px_rgba(0,210,255,0.4)]'
-                                  : 'hover:bg-[#0b2447] border border-transparent hover:border-[#1f4a7c]'
-                              }`}
-                            >
-                              <div className="flex flex-col min-w-0 pr-2">
-                                <div className="flex items-center gap-1.5">
-                                  <Ship className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-[#00d2ff]' : 'text-[#8ab4f8]'}`} />
-                                  <span className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-[#e2f1ff]'}`}>
-                                    {prj.name}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] text-[#8ab4f8] mt-1">
-                                  <span>{prj.shipCode}</span>
-                                  <span>·</span>
-                                  <span className="text-[#00d2ff]">{prj.dockingArea}</span>
-                                </div>
-                              </div>
-
-                              <div className="text-right shrink-0">
-                                <div className="text-[11px] font-mono font-bold text-[#00e676]">{prj.progress}%</div>
-                                <span className="text-[9px] text-[#557696]">{prj.phase}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* 造船项目视图按钮 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewScope('project');
+                    setShowModelLevelMenu(true);
+                  }}
+                  className={`px-4 py-1 text-[12px] font-bold tracking-wider transition-all duration-300 rounded-full flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                    viewScope === 'project'
+                      ? 'text-white bg-gradient-to-r from-blue-600 to-cyan-500 shadow-[0_0_14px_rgba(0,210,255,0.7)]'
+                      : 'text-[#8ab4f8] hover:text-white hover:bg-[#0c315e]/50'
+                  }`}
+                >
+                  <Ship className="w-3.5 h-3.5" />
+                  <span>造船项目</span>
+                </button>
               </div>
-            )}
 
-          </div>
+              {/* 当处于“造船项目”视图时，调取项目管理中的项目名称列表供实时切换 (模型分层选择已移至图层控制) */}
+              {viewScope === 'project' && (
+                <div className="flex items-center gap-2">
+                  {/* 1. 项目选择器 */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsProjectDropdownOpen(!isProjectDropdownOpen);
+                      }}
+                      className="flex items-center gap-2 bg-[#0a264a]/90 hover:bg-[#0f3466] border border-[#00d2ff]/80 px-3.5 py-1 rounded-full text-xs text-[#e2f1ff] shadow-[0_0_14px_rgba(0,210,255,0.35)] transition-all duration-200 cursor-pointer"
+                    >
+                      <Anchor className="w-3 h-3 text-[#00d2ff]" />
+                      <span className="font-bold text-[#00d2ff]">{currentProject.name}</span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-[#00d2ff] transition-transform duration-200 ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* 项目下拉选择弹窗菜单 */}
+                    {isProjectDropdownOpen && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute top-full mt-1.5 left-0 w-80 bg-[#061833]/95 border border-[#00d2ff] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8),0_0_20px_rgba(0,210,255,0.4)] backdrop-blur-xl p-2 z-50 animate-fadeIn"
+                      >
+                        <div className="text-[10px] font-bold text-[#8ab4f8] px-2.5 py-1 uppercase tracking-wider border-b border-[#1f4a7c]/60 mb-1 flex items-center justify-between">
+                          <span>选择造船项目模型</span>
+                          <span className="text-[#00d2ff]">共 {projectListConfig.length} 个在建项目</span>
+                        </div>
+
+                        <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                          {projectListConfig.map((prj) => {
+                            const isSelected = prj.id === selectedProjectId;
+                            return (
+                              <div
+                                key={prj.id}
+                                onClick={() => {
+                                  setSelectedProjectId(prj.id);
+                                  setIsProjectDropdownOpen(false);
+                                }}
+                                className={`p-2 rounded-xl cursor-pointer transition-all flex items-center justify-between ${
+                                  isSelected
+                                    ? 'bg-gradient-to-r from-[#19528f]/90 to-[#0c315e]/90 border border-[#00d2ff] shadow-[0_0_12px_rgba(0,210,255,0.4)]'
+                                    : 'hover:bg-[#0b2447] border border-transparent hover:border-[#1f4a7c]'
+                                }`}
+                              >
+                                <div className="flex flex-col min-w-0 pr-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <Ship className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-[#00d2ff]' : 'text-[#8ab4f8]'}`} />
+                                    <span className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-[#e2f1ff]'}`}>
+                                      {prj.name}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[10px] text-[#8ab4f8] mt-1">
+                                    <span>{prj.shipCode}</span>
+                                    <span>·</span>
+                                    <span className="text-[#00d2ff]">{prj.dockingArea}</span>
+                                  </div>
+                                </div>
+
+                                <div className="text-right shrink-0">
+                                  <div className="text-[11px] font-mono font-bold text-[#00e676]">{prj.progress}%</div>
+                                  <span className="text-[9px] text-[#557696]">{prj.phase}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
         </div>
 
-        {/* 右侧：时间日期与天气、「作业看板」按钮(仅普通模式)、「触发告警信息」按钮、全景模式按钮、管理员标识、展厅双屏切换按钮(展厅模式右上角) */}
+        {/* 右侧：普通模式保留全量控制按钮；展厅模式下右上角保留时间日期天气，并将登录人员信息保留在最右边（移除全屏与触发告警按钮） */}
         <div className={`flex justify-end items-center whitespace-nowrap shrink-0 ${
-          exhibitionMode ? 'gap-2.5 pt-1' : 'gap-3 pt-2'
+          exhibitionMode ? 'gap-2.5 pt-2.5 pr-1' : 'gap-3 pt-2'
         }`}>
           
           {/* 时间、日期与天气 */}
@@ -4227,97 +4342,214 @@ export function Dashboard({
             </span>
           </div>
 
-          {/* 📺 作业看板链接按钮（仅普通模式显示；展厅模式下统一使用右上角双屏切换胶囊） */}
-          {!exhibitionMode && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onNavigate) {
-                  onNavigate('workface_screen');
-                }
-                window.dispatchEvent(new CustomEvent('navigate_view', { detail: { view: 'workface_screen' } }));
-              }}
-              className="border border-[#00d2ff]/80 bg-gradient-to-r from-[#06244d] via-[#0d3b6f] to-[#082046] text-[#00d2ff] hover:text-white hover:border-[#00e676] hover:shadow-[0_0_14px_rgba(0,230,118,0.5)] rounded-full transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-[0_0_12px_rgba(0,210,255,0.4)] active:scale-95 group px-3 py-1 text-xs font-bold"
-              title="进入作业看板安全监控系统"
-            >
-              <Tv className="w-3.5 h-3.5 text-[#00d2ff] group-hover:scale-110 group-hover:text-[#00e676] transition-transform animate-pulse" />
-              <span>作业看板</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00d2ff] group-hover:bg-[#00e676] shadow-[0_0_6px_#00d2ff]"></span>
-            </button>
-          )}
-
-          {/* 🚨 触发告警信息按钮 (与左侧查询框互换位置) */}
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveAlarmModalData({
-                id: `ALERT-EMERGENCY-${Date.now()}`,
-                time: formatDate(currentTime).split(' ')[1],
-                name: '李强 (组长)',
-                workerId: 'LNG20260421',
-                role: '高级焊接技师',
-                reason: '1#液货舱绝热合拢受限空间气体指标异常',
-                location: '1#液货舱绝热合拢受限空间底部',
-                projectName: currentProject.name,
-                dangerLevel: 'high',
-                gasReading: '氧气 17.8% (严重偏低) | 可燃气 0%LEL',
-                deviceLinked: 'LNG-GAS-01 气体检测仪 & 龙门吊防碰报警器',
-                status: 'pending'
-              });
-            }}
-            className="px-3 py-1 text-xs border border-red-500 bg-red-600/30 text-red-300 hover:bg-red-600 hover:text-white rounded-full transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.5)] animate-pulse"
-            title="触发紧急告警明显提示窗"
-          >
-            <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-            <span className="font-bold">触发告警信息</span>
-          </button>
-
-          <div className="h-4 w-px bg-[#1f4a7c]/60"></div>
-
-          {/* 全景模式按钮 (去掉文字，只保留图标) */}
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsPanelsVisible(!isPanelsVisible);
-            }}
-            className={`w-7 h-7 flex items-center justify-center border rounded-full transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-              isPanelsVisible 
-                ? 'border-[#1f4a7c] bg-[#0b2447]/70 text-[#8ab4f8] hover:text-white hover:border-[#00d2ff]' 
-                : 'border-[#00d2ff] bg-[#00d2ff]/20 text-[#00d2ff] animate-pulse shadow-[0_0_10px_rgba(0,210,255,0.4)]'
-            }`}
-            title={isPanelsVisible ? "全景模式 (隐藏全部数据面板)" : "显示全部数据面板"}
-          >
-            {isPanelsVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-          </button>
-
-          {/* 管理员标识 */}
-          <div className="flex items-center gap-1.5 text-xs text-[#e2f1ff] border border-[#1f4a7c] bg-[#0b2447]/70 px-2.5 py-1 rounded-full whitespace-nowrap shrink-0">
-            <div className="w-4 h-4 rounded-full bg-[#103a68] flex items-center justify-center border border-[#00d2ff] shrink-0">
-              <User className="w-2.5 h-2.5 text-[#00d2ff]" />
-            </div>
-            <span className="tracking-wide whitespace-nowrap font-medium">管理员</span>
-          </div>
-
-          {/* 展厅展示模式：右上角「驾驶舱 / 作业面大屏」切换胶囊（与作业面大屏右上角控制栏位置与风格保持一致） */}
           {exhibitionMode && (
-            <div className="flex items-center gap-1.5 bg-[#03152d]/90 backdrop-blur-md px-2 py-1.5 rounded-full border border-cyan-400/45 shadow-[0_6px_28px_rgba(0,0,0,0.85),0_0_16px_rgba(0,210,255,0.28)] shrink-0">
-              <span className="flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-xs font-extrabold tracking-wide shadow-[0_0_16px_rgba(0,210,255,0.55)]">
-                <LayoutDashboard className="w-4 h-4" />
-                <span>驾驶舱</span>
-              </span>
-              {onExhibitionSwitchWorkface && (
-                <button
-                  type="button"
-                  onClick={onExhibitionSwitchWorkface}
-                  className="flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-full text-cyan-200 hover:text-white hover:bg-cyan-500/20 text-xs font-extrabold tracking-wide active:scale-95 transition-all cursor-pointer"
-                  title="触摸切换至作业面大屏"
+            <div className="relative shrink-0" ref={exhibitionUserMenuRef}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsProjectDropdownOpen(false);
+                  setIsExitAuthOpen(prev => {
+                    const next = !prev;
+                    if (!next) {
+                      setExitPassword('');
+                      setExitAuthError(null);
+                    } else {
+                      setExitAuthError(null);
+                    }
+                    return next;
+                  });
+                }}
+                className={`flex items-center gap-1.5 text-xs text-[#e2f1ff] border px-2.5 py-1 rounded-full whitespace-nowrap shrink-0 cursor-pointer transition-all active:scale-95 ${
+                  isExitAuthOpen
+                    ? 'border-[#00d2ff] bg-[#103a68] shadow-[0_0_14px_rgba(0,210,255,0.45)]'
+                    : 'border-[#1f4a7c] bg-[#0b2447]/75 hover:border-[#00d2ff]/80 hover:bg-[#0f3466]/90'
+                }`}
+                title="点击验证当前登录者密码以退出系统"
+              >
+                <div className="w-4 h-4 rounded-full bg-[#103a68] flex items-center justify-center border border-[#00d2ff] shrink-0">
+                  <User className="w-2.5 h-2.5 text-[#00d2ff]" />
+                </div>
+                <span className="tracking-wide whitespace-nowrap font-medium">
+                  {currentUser?.name?.split(' ')[0] || currentUser?.username || '管理员'}
+                </span>
+                <ChevronDown
+                  className={`w-3 h-3 text-[#00d2ff]/80 transition-transform duration-200 ${
+                    isExitAuthOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {isExitAuthOpen && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full mt-2 w-72 z-50 bg-[#061833]/96 backdrop-blur-xl border border-[#00d2ff]/65 rounded-2xl shadow-[0_14px_36px_rgba(0,0,0,0.88),0_0_24px_rgba(0,210,255,0.28)] p-3.5 text-left animate-fadeIn"
                 >
-                  <Tv className="w-4 h-4 text-[#00d2ff]" />
-                  <span>作业面大屏</span>
-                </button>
+                  <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-[#1f4a7c]/60">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-6 h-6 rounded-lg bg-[#0d3b6f] border border-[#00d2ff]/50 flex items-center justify-center">
+                        <Lock className="w-3.5 h-3.5 text-[#00d2ff]" />
+                      </div>
+                      <span className="text-xs font-bold text-white tracking-wide">登录者身份验证</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExitAuthOpen(false);
+                        setExitPassword('');
+                        setExitAuthError(null);
+                      }}
+                      className="text-[#8ab4f8] hover:text-white p-0.5 rounded cursor-pointer"
+                      title="关闭"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="mb-2.5 px-2.5 py-1.5 rounded-lg bg-[#0b2447]/80 border border-[#1f4a7c]/70 flex items-center justify-between text-[11px]">
+                    <span className="text-[#8ab4f8]">当前账号</span>
+                    <span className="font-mono font-bold text-[#00e5ff]">
+                      {currentUser?.username || 'admin'}
+                      {currentUser?.role ? ` · ${currentUser.role}` : ''}
+                    </span>
+                  </div>
+
+                  <form onSubmit={handleVerifyAndLogout} className="space-y-2.5">
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#b6d4fb] mb-1">
+                        请输入登录密码以退出至登录页
+                      </label>
+                      <div className="relative flex items-center">
+                        <input
+                          type={showExitPassword ? 'text' : 'password'}
+                          value={exitPassword}
+                          autoFocus
+                          onChange={(e) => {
+                            setExitPassword(e.target.value);
+                            if (exitAuthError) setExitAuthError(null);
+                          }}
+                          placeholder="请输入当前账号密码"
+                          className={`w-full pl-3 pr-8 py-1.5 text-xs rounded-lg bg-[#041226] text-white placeholder-[#557696] border focus:outline-none transition-colors ${
+                            exitAuthError
+                              ? 'border-rose-500/80 focus:border-rose-400'
+                              : 'border-[#1f4a7c] focus:border-[#00d2ff]'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowExitPassword(prev => !prev)}
+                          className="absolute right-2 text-[#8ab4f8] hover:text-white p-0.5 cursor-pointer"
+                          title={showExitPassword ? '隐藏密码' : '显示密码'}
+                        >
+                          {showExitPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      {exitAuthError && (
+                        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-rose-400">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>{exitAuthError}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsExitAuthOpen(false);
+                          setExitPassword('');
+                          setExitAuthError(null);
+                        }}
+                        className="px-3 py-1.5 text-[11px] font-medium text-[#8ab4f8] hover:text-white bg-[#0b2447] hover:bg-[#123564] border border-[#1f4a7c] rounded-lg transition-colors cursor-pointer"
+                      >
+                        取消
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-3.5 py-1.5 text-[11px] font-bold text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-lg shadow-[0_0_12px_rgba(0,210,255,0.45)] flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                      >
+                        <LogOut className="w-3 h-3" />
+                        <span>验证并退出</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
               )}
             </div>
+          )}
+
+          {!exhibitionMode && (
+            <>
+              {/* 📺 作业看板链接按钮（仅普通模式显示） */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onNavigate) {
+                    onNavigate('workface_screen');
+                  }
+                  window.dispatchEvent(new CustomEvent('navigate_view', { detail: { view: 'workface_screen' } }));
+                }}
+                className="border border-[#00d2ff]/80 bg-gradient-to-r from-[#06244d] via-[#0d3b6f] to-[#082046] text-[#00d2ff] hover:text-white hover:border-[#00e676] hover:shadow-[0_0_14px_rgba(0,230,118,0.5)] rounded-full transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-[0_0_12px_rgba(0,210,255,0.4)] active:scale-95 group px-3 py-1 text-xs font-bold"
+                title="进入作业看板安全监控系统"
+              >
+                <Tv className="w-3.5 h-3.5 text-[#00d2ff] group-hover:scale-110 group-hover:text-[#00e676] transition-transform animate-pulse" />
+                <span>作业看板</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00d2ff] group-hover:bg-[#00e676] shadow-[0_0_6px_#00d2ff]"></span>
+              </button>
+
+              {/* 🚨 触发告警信息按钮 */}
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveAlarmModalData({
+                    id: `ALERT-EMERGENCY-${Date.now()}`,
+                    time: formatDate(currentTime).split(' ')[1],
+                    name: '李强 (组长)',
+                    workerId: 'LNG20260421',
+                    role: '高级焊接技师',
+                    reason: '1#液货舱绝热合拢受限空间气体指标异常',
+                    location: '1#液货舱绝热合拢受限空间底部',
+                    projectName: currentProject.name,
+                    dangerLevel: 'high',
+                    gasReading: '氧气 17.8% (严重偏低) | 可燃气 0%LEL',
+                    deviceLinked: 'LNG-GAS-01 气体检测仪 & 龙门吊防碰报警器',
+                    status: 'pending'
+                  });
+                }}
+                className="px-3 py-1 text-xs border border-red-500 bg-red-600/30 text-red-300 hover:bg-red-600 hover:text-white rounded-full transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.5)] animate-pulse"
+                title="触发紧急告警明显提示窗"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                <span className="font-bold">触发告警信息</span>
+              </button>
+
+              <div className="h-4 w-px bg-[#1f4a7c]/60"></div>
+
+              {/* 全景模式按钮 */}
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsPanelsVisible(!isPanelsVisible);
+                }}
+                className={`w-7 h-7 flex items-center justify-center border rounded-full transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                  isPanelsVisible 
+                    ? 'border-[#1f4a7c] bg-[#0b2447]/70 text-[#8ab4f8] hover:text-white hover:border-[#00d2ff]' 
+                    : 'border-[#00d2ff] bg-[#00d2ff]/20 text-[#00d2ff] animate-pulse shadow-[0_0_10px_rgba(0,210,255,0.4)]'
+                }`}
+                title={isPanelsVisible ? "全景模式 (隐藏全部数据面板)" : "显示全部数据面板"}
+              >
+                {isPanelsVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+
+              {/* 管理员标识 */}
+              <div className="flex items-center gap-1.5 text-xs text-[#e2f1ff] border border-[#1f4a7c] bg-[#0b2447]/70 px-2.5 py-1 rounded-full whitespace-nowrap shrink-0">
+                <div className="w-4 h-4 rounded-full bg-[#103a68] flex items-center justify-center border border-[#00d2ff] shrink-0">
+                  <User className="w-2.5 h-2.5 text-[#00d2ff]" />
+                </div>
+                <span className="tracking-wide whitespace-nowrap font-medium">管理员</span>
+              </div>
+            </>
           )}
         </div>
       </header>
@@ -4796,17 +5028,133 @@ export function Dashboard({
           
           {/* 中间上层漫游控制 */}
           <div className="flex-1 relative">
-            {/* 隐藏数据面板状态下的全景漫游提示气泡 */}
-            {!isPanelsVisible && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#061833]/90 border border-[#00d2ff] backdrop-blur-md px-5 py-2 rounded-full shadow-[0_0_20px_rgba(0,210,255,0.4)] flex items-center gap-2.5 text-sm text-[#e2f1ff] animate-bounce z-30 pointer-events-auto">
+            {/* 隐藏数据面板状态下的全景漫游提示气泡（仅普通模式可进入） */}
+            {!exhibitionMode && !isPanelsVisible && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsPanelsVisible(true);
+                }}
+                className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#061833]/90 border border-[#00d2ff] backdrop-blur-md px-5 py-2 rounded-full shadow-[0_0_20px_rgba(0,210,255,0.4)] flex items-center gap-2.5 text-xs sm:text-sm text-[#e2f1ff] z-30 pointer-events-auto cursor-pointer whitespace-nowrap animate-bounce"
+              >
                 <Eye className="w-4 h-4 text-[#00d2ff]" />
                 <span>
-                  {viewScope === 'yard' ? '厂区全景漫游模式' : `${currentProject.name} 3D孪生漫游模式`} · 点击任意背景区域即可恢复数据面板
+                  {viewScope === 'yard' ? '厂区全景漫游模式' : `${currentProject.name} 3D孪生漫游模式`} · 点击任意背景或此处恢复数据面板
                 </span>
               </div>
             )}
 
           </div>
+
+          {/* 展厅展示模式：厂区全景和造船项目切换按钮独立常驻放在厂区今日数据概览上方正中间 */}
+          {exhibitionMode && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="flex justify-center items-center gap-2.5 mb-2.5 z-30 pointer-events-auto relative shrink-0"
+            >
+              <div className="flex items-center bg-[#061833]/92 backdrop-blur-xl p-1 rounded-full border border-[#00d2ff]/60 shadow-[0_6px_24px_rgba(0,0,0,0.65),0_0_18px_rgba(0,210,255,0.28)] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewScope('yard');
+                    setIsProjectDropdownOpen(false);
+                  }}
+                  className={`px-4 py-1.5 text-xs font-bold tracking-wider transition-all duration-200 rounded-full flex items-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 ${
+                    viewScope === 'yard'
+                      ? 'text-white bg-gradient-to-r from-blue-600 to-cyan-500 shadow-[0_0_14px_rgba(0,210,255,0.7)]'
+                      : 'text-[#8ab4f8] hover:text-white hover:bg-[#0c315e]/50'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>厂区全景</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewScope('project');
+                    setShowModelLevelMenu(true);
+                  }}
+                  className={`px-4 py-1.5 text-xs font-bold tracking-wider transition-all duration-200 rounded-full flex items-center gap-1.5 whitespace-nowrap cursor-pointer active:scale-95 ${
+                    viewScope === 'project'
+                      ? 'text-white bg-gradient-to-r from-blue-600 to-cyan-500 shadow-[0_0_14px_rgba(0,210,255,0.7)]'
+                      : 'text-[#8ab4f8] hover:text-white hover:bg-[#0c315e]/50'
+                  }`}
+                >
+                  <Ship className="w-3.5 h-3.5" />
+                  <span>造船项目</span>
+                </button>
+              </div>
+
+              {viewScope === 'project' && (
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProjectDropdownOpen(prev => !prev);
+                      setIsExitAuthOpen(false);
+                    }}
+                    className="flex items-center gap-1.5 bg-[#0a264a]/95 hover:bg-[#0f3466] border border-[#00d2ff]/80 px-3.5 py-1.5 rounded-full text-xs text-[#e2f1ff] shadow-[0_0_14px_rgba(0,210,255,0.32)] transition-all cursor-pointer active:scale-95"
+                  >
+                    <Anchor className="w-3.5 h-3.5 text-[#00d2ff] shrink-0" />
+                    <span className="font-bold text-[#00d2ff] max-w-[180px] truncate">{currentProject.name}</span>
+                    <ChevronUp className={`w-3.5 h-3.5 text-[#00d2ff] transition-transform duration-200 shrink-0 ${isProjectDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isProjectDropdownOpen && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 w-80 bg-[#061833]/96 border border-[#00d2ff] rounded-2xl shadow-[0_-10px_34px_rgba(0,0,0,0.85),0_0_20px_rgba(0,210,255,0.38)] backdrop-blur-xl p-2 z-50 animate-fadeIn text-left"
+                    >
+                      <div className="text-[10px] font-bold text-[#8ab4f8] px-2.5 py-1 uppercase tracking-wider border-b border-[#1f4a7c]/60 mb-1 flex items-center justify-between">
+                        <span>选择造船项目模型</span>
+                        <span className="text-[#00d2ff]">共 {projectListConfig.length} 个在建项目</span>
+                      </div>
+
+                      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                        {projectListConfig.map((prj) => {
+                          const isSelected = prj.id === selectedProjectId;
+                          return (
+                            <div
+                              key={prj.id}
+                              onClick={() => {
+                                setSelectedProjectId(prj.id);
+                                setIsProjectDropdownOpen(false);
+                              }}
+                              className={`p-2 rounded-xl cursor-pointer transition-all flex items-center justify-between ${
+                                isSelected
+                                  ? 'bg-gradient-to-r from-[#19528f]/90 to-[#0c315e]/90 border border-[#00d2ff] shadow-[0_0_12px_rgba(0,210,255,0.4)]'
+                                  : 'hover:bg-[#0b2447] border border-transparent hover:border-[#1f4a7c]'
+                              }`}
+                            >
+                              <div className="flex flex-col min-w-0 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                  <Ship className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-[#00d2ff]' : 'text-[#8ab4f8]'}`} />
+                                  <span className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-[#e2f1ff]'}`}>
+                                    {prj.name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-[#8ab4f8] mt-1">
+                                  <span>{prj.shipCode}</span>
+                                  <span>·</span>
+                                  <span className="text-[#00d2ff]">{prj.dockingArea}</span>
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <div className="text-[11px] font-mono font-bold text-[#00e676]">{prj.progress}%</div>
+                                <span className="text-[9px] text-[#557696]">{prj.phase}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 底部：今日数据概览横幅 (向下滑入/滑出，圆角风格) */}
           <div 
@@ -5156,6 +5504,73 @@ export function Dashboard({
         </div>
 
       </div>
+
+      {/* 展厅展示模式：驾驶舱与作业面大屏切换从右下角单独滑出 */}
+      {exhibitionMode && (
+        <>
+          {/* 右下角收起态侧边滑出拉手（仅保留左箭头，点击后滑出切换按钮） */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsScreenSwitchOpen(true);
+              touchScreenSwitch();
+            }}
+            className={`fixed bottom-5 right-0 z-50 flex items-center justify-center pl-2.5 pr-2 py-3 rounded-l-full bg-[#041936]/92 hover:bg-[#082b5c] backdrop-blur-xl border-y border-l border-cyan-400/60 text-cyan-100 hover:text-white shadow-[-6px_4px_24px_rgba(0,0,0,0.75),0_0_16px_rgba(0,210,255,0.28)] transition-all duration-300 ease-out cursor-pointer active:scale-95 group ${
+              isScreenSwitchOpen
+                ? 'translate-x-full opacity-0 pointer-events-none'
+                : 'translate-x-0 opacity-100 pointer-events-auto'
+            }`}
+            title="点击展开大屏切换"
+          >
+            <ChevronLeft className="w-4 h-4 text-[#00d2ff] group-hover:-translate-x-0.5 transition-transform" />
+          </button>
+
+          {/* 右下角滑出态：驾驶舱 / 作业面大屏切换胶囊 */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              touchScreenSwitch();
+            }}
+            onMouseDown={touchScreenSwitch}
+            onTouchStart={touchScreenSwitch}
+            className={`fixed bottom-5 right-4 z-50 transition-all duration-300 ease-out ${
+              isScreenSwitchOpen
+                ? 'translate-x-0 opacity-100 pointer-events-auto'
+                : 'translate-x-[120%] opacity-0 pointer-events-none'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 bg-[#03152d]/95 backdrop-blur-xl p-1.5 rounded-full border border-cyan-400/65 shadow-[0_12px_36px_rgba(0,0,0,0.88),0_0_24px_rgba(0,210,255,0.35)]">
+              <span className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-xs font-extrabold tracking-wide shadow-[0_0_14px_rgba(0,210,255,0.55)]">
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span>驾驶舱</span>
+              </span>
+              {onExhibitionSwitchWorkface && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    touchScreenSwitch();
+                    onExhibitionSwitchWorkface();
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-cyan-200 hover:text-white hover:bg-cyan-500/20 text-xs font-extrabold tracking-wide active:scale-95 transition-all cursor-pointer"
+                  title="触摸切换至作业面大屏"
+                >
+                  <Tv className="w-3.5 h-3.5 text-[#00d2ff]" />
+                  <span>作业面大屏</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsScreenSwitchOpen(false)}
+                className="w-8 h-8 rounded-full bg-[#0b2447]/80 hover:bg-[#133b6e] border border-[#1f4a7c] hover:border-cyan-400/60 text-[#8ab4f8] hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 active:scale-95 ml-0.5"
+                title="收起至右下角"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   );

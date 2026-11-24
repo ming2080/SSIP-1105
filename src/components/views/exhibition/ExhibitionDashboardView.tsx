@@ -10,17 +10,20 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Maximize2 } from 'lucide-react';
 import { Dashboard } from '../Dashboard';
 import { WorkfaceScreenView } from '../workface/WorkfaceScreenView';
 
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分钟无操作自动复位
 
-export function ExhibitionDashboardView() {
+interface ExhibitionDashboardViewProps {
+  currentUser?: { username: string; role: string; name: string };
+  onLogout?: () => void;
+}
+
+export function ExhibitionDashboardView({ currentUser, onLogout }: ExhibitionDashboardViewProps = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeScreen, setActiveScreen] = useState<'dashboard' | 'workface'>('dashboard');
   const [resetHomeSignal, setResetHomeSignal] = useState<number>(0);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const idleTimerRef = useRef<number | null>(null);
   const lastMoveSignalRef = useRef<number>(0);
 
@@ -46,15 +49,8 @@ export function ExhibitionDashboardView() {
       requestNativeFullscreen();
     }, 60);
 
-    const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFsChange);
-    document.addEventListener('webkitfullscreenchange', handleFsChange);
     return () => {
       window.clearTimeout(timer);
-      document.removeEventListener('fullscreenchange', handleFsChange);
-      document.removeEventListener('webkitfullscreenchange', handleFsChange);
     };
   }, [requestNativeFullscreen]);
 
@@ -128,19 +124,9 @@ export function ExhibitionDashboardView() {
           exhibitionMode={true}
           resetHomeSignal={resetHomeSignal}
           onExhibitionSwitchWorkface={() => handleSwitchScreen('workface')}
+          currentUser={currentUser}
+          onExhibitionLogout={onLogout}
         />
-
-        {!isFullscreen && (
-          <button
-            type="button"
-            onClick={requestNativeFullscreen}
-            className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#041936]/85 hover:bg-[#092b5a] text-cyan-200 border border-[#00d2ff]/45 text-[11px] font-semibold shadow-lg backdrop-blur-md cursor-pointer transition-all active:scale-95"
-            title="开启浏览器原生全屏展示"
-          >
-            <Maximize2 className="w-3.5 h-3.5 text-[#00d2ff]" />
-            <span>进入全屏展示</span>
-          </button>
-        )}
       </div>
 
       {/* 次页：作业面大屏独立展示视图（支持触摸一键切换回驾驶舱，仅展示码头船舶自动轮播） */}

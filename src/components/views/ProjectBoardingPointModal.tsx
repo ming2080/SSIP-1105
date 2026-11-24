@@ -24,13 +24,16 @@ import {
   Anchor,
   MapPin,
   Ship,
-  AlertCircle
+  AlertCircle,
+  Video
 } from 'lucide-react';
 import { CreatedProjectData } from './CreateProjectModal';
 import {
   BoardingPointConfigItem,
   BoardingExciterOption,
+  BoardingCameraOption,
   getAllAvailableExciterDevices,
+  getAllAvailableCameraDevices,
   getStoredBoardingPoints,
   saveStoredBoardingPoints
 } from '@/src/data/boardingPointData';
@@ -43,6 +46,7 @@ interface ProjectBoardingPointModalProps {
 }
 
 type PointSide = 'ground' | 'ship';
+type PickerTarget = PointSide | 'camera';
 
 export function ProjectBoardingPointModal({
   isOpen,
@@ -53,11 +57,12 @@ export function ProjectBoardingPointModal({
   const [boardingPoints, setBoardingPoints] = useState<BoardingPointConfigItem[]>([]);
   const [activePointId, setActivePointId] = useState<string | null>(null);
   const [availableDevices, setAvailableDevices] = useState<BoardingExciterOption[]>([]);
+  const [availableCameras, setAvailableCameras] = useState<BoardingCameraOption[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // 关联激励器子弹窗状态
-  const [pickingSide, setPickingSide] = useState<PointSide | null>(null);
+  // 关联设备子弹窗状态（支持地面/船上激励器及辅助点人数摄像头）
+  const [pickingSide, setPickingSide] = useState<PickerTarget | null>(null);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [exciterSearch, setExciterSearch] = useState('');
 
@@ -70,9 +75,11 @@ export function ProjectBoardingPointModal({
     if (!isOpen || !project) return;
     const loadedPoints = getStoredBoardingPoints(project.id);
     const devices = getAllAvailableExciterDevices();
+    const cameras = getAllAvailableCameraDevices();
     setBoardingPoints(loadedPoints);
     setActivePointId(loadedPoints[0]?.id || null);
     setAvailableDevices(devices);
+    setAvailableCameras(cameras);
     setValidationError(null);
     setPickingSide(null);
     setSelectedDeviceIds([]);
@@ -89,6 +96,12 @@ export function ProjectBoardingPointModal({
     availableDevices.forEach(d => map.set(d.id, d));
     return map;
   }, [availableDevices]);
+
+  const cameraMap = useMemo(() => {
+    const map = new Map<string, BoardingCameraOption>();
+    availableCameras.forEach(c => map.set(c.id, c));
+    return map;
+  }, [availableCameras]);
 
   const pairedCount = useMemo(() => {
     return boardingPoints.filter(
@@ -112,6 +125,8 @@ export function ProjectBoardingPointModal({
       sequenceWindowSec: 30,
       groundDeviceIds: [],
       shipDeviceIds: [],
+      cameraAssistEnabled: false,
+      cameraDeviceIds: [],
       updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19)
     };
     setBoardingPoints(prev => [...prev, newPoint]);
@@ -140,14 +155,14 @@ export function ProjectBoardingPointModal({
     setValidationError(null);
   };
 
-  // 打开激励器选择弹窗
-  const handleOpenDevicePicker = (side: PointSide) => {
-    setPickingSide(side);
+  // 打开关联设备选择弹窗（激励器或摄像头）
+  const handleOpenDevicePicker = (target: PickerTarget) => {
+    setPickingSide(target);
     setSelectedDeviceIds([]);
     setExciterSearch('');
   };
 
-  // 确认批量关联激励器
+  // 确认批量关联设备
   const handleConfirmBatchAdd = () => {
     if (!pickingSide || !activePoint || selectedDeviceIds.length === 0) {
       setPickingSide(null);
@@ -161,34 +176,48 @@ export function ProjectBoardingPointModal({
           groundDeviceIds: Array.from(new Set([...point.groundDeviceIds, ...selectedDeviceIds]))
         };
       }
+      if (pickingSide === 'ship') {
+        return {
+          ...point,
+          shipDeviceIds: Array.from(new Set([...point.shipDeviceIds, ...selectedDeviceIds]))
+        };
+      }
+      const prevCameras = point.cameraDeviceIds || [];
       return {
         ...point,
-        shipDeviceIds: Array.from(new Set([...point.shipDeviceIds, ...selectedDeviceIds]))
+        cameraAssistEnabled: true,
+        cameraDeviceIds: Array.from(new Set([...prevCameras, ...selectedDeviceIds]))
       };
     });
 
-    showToast(`已关联 ${selectedDeviceIds.length} 台设备`);
+    showToast(`已关联 ${selectedDeviceIds.length} 台${pickingSide === 'camera' ? '摄像头' : '设备'}`);
     setPickingSide(null);
     setSelectedDeviceIds([]);
   };
 
-  // 解除激励器关联
-  const handleRemoveDevice = (devId: string, side: PointSide) => {
+  // 解除设备关联
+  const handleRemoveDevice = (devId: string, target: PickerTarget) => {
     updateActivePoint(point => {
-      if (side === 'ground') {
+      if (target === 'ground') {
         return {
           ...point,
           groundDeviceIds: point.groundDeviceIds.filter(id => id !== devId)
         };
       }
+      if (target === 'ship') {
+        return {
+          ...point,
+          shipDeviceIds: point.shipDeviceIds.filter(id => id !== devId)
+        };
+      }
       return {
         ...point,
-        shipDeviceIds: point.shipDeviceIds.filter(id => id !== devId)
+        cameraDeviceIds: (point.cameraDeviceIds || []).filter(id => id !== devId)
       };
     });
   };
 
-  // 单船多登船点与双侧点位互斥占用映射
+  // 单船多登船点与双侧点位互斥占用映射（激励器）
   const deviceUsageMap = useMemo(() => {
     const usage = new Map<string, { pointId: string; pointName: string; side: PointSide }>();
     boardingPoints.forEach(point => {
@@ -197,6 +226,17 @@ export function ProjectBoardingPointModal({
       });
       point.shipDeviceIds.forEach(id => {
         usage.set(id, { pointId: point.id, pointName: point.name, side: 'ship' });
+      });
+    });
+    return usage;
+  }, [boardingPoints]);
+
+  // 摄像头设备在各登船点的占用映射
+  const cameraUsageMap = useMemo(() => {
+    const usage = new Map<string, { pointId: string; pointName: string }>();
+    boardingPoints.forEach(point => {
+      (point.cameraDeviceIds || []).forEach(id => {
+        usage.set(id, { pointId: point.id, pointName: point.name });
       });
     });
     return usage;
@@ -222,9 +262,33 @@ export function ProjectBoardingPointModal({
     });
   }, [availableDevices, exciterSearch, deviceUsageMap]);
 
+  const filteredCameraList = useMemo(() => {
+    const kw = exciterSearch.toLowerCase().trim();
+    const list = availableCameras.filter(cam => {
+      if (!kw) return true;
+      return (
+        cam.name.toLowerCase().includes(kw) ||
+        cam.code.toLowerCase().includes(kw) ||
+        cam.location.toLowerCase().includes(kw) ||
+        (cam.modelCategory || '').toLowerCase().includes(kw)
+      );
+    });
+
+    return list.slice().sort((a, b) => {
+      const aUsed = cameraUsageMap.has(a.id);
+      const bUsed = cameraUsageMap.has(b.id);
+      if (aUsed && !bUsed) return 1;
+      if (!aUsed && bUsed) return -1;
+      return 0;
+    });
+  }, [availableCameras, exciterSearch, cameraUsageMap]);
+
   const selectableDevices = useMemo(() => {
+    if (pickingSide === 'camera') {
+      return filteredCameraList.filter(cam => !cameraUsageMap.has(cam.id));
+    }
     return filteredExciterList.filter(dev => !deviceUsageMap.has(dev.id));
-  }, [filteredExciterList, deviceUsageMap]);
+  }, [pickingSide, filteredCameraList, cameraUsageMap, filteredExciterList, deviceUsageMap]);
 
   const isAllSelectableChecked = useMemo(() => {
     if (selectableDevices.length === 0) return false;
@@ -264,11 +328,18 @@ export function ProjectBoardingPointModal({
         setValidationError(`【${point.name}】缺少${missing.join('、')}关联激励器，请先配对设备`);
         return;
       }
+      if (point.enabled && point.cameraAssistEnabled && (!point.cameraDeviceIds || point.cameraDeviceIds.length === 0)) {
+        setActivePointId(point.id);
+        setValidationError(`【${point.name}】已启用摄像头辅助点人数，请关联至少一台摄像头设备`);
+        return;
+      }
     }
 
     const normalized = boardingPoints.map(p => ({
       ...p,
-      directionMode: 'bidirectional' as const
+      directionMode: 'bidirectional' as const,
+      cameraAssistEnabled: Boolean(p.cameraAssistEnabled),
+      cameraDeviceIds: Array.isArray(p.cameraDeviceIds) ? p.cameraDeviceIds : []
     }));
     saveStoredBoardingPoints(project.id, normalized);
     showToast('登船点配置已保存');
@@ -322,6 +393,56 @@ export function ProjectBoardingPointModal({
         <button
           type="button"
           onClick={() => handleRemoveDevice(devId, side)}
+          className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+          title="解除关联"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  };
+
+  const renderCameraCard = (camId: string) => {
+    const cam = cameraMap.get(camId) || {
+      id: camId,
+      code: camId,
+      name: `摄像头 ${camId}`,
+      location: '登船点通道',
+      modelCategory: '进出客流点人数统计',
+      status: '在线' as const
+    };
+
+    return (
+      <div
+        key={camId}
+        className="p-2.5 rounded-xl border border-cyan-200/90 bg-cyan-50/40 hover:border-cyan-400 flex items-center justify-between gap-2 transition-all"
+      >
+        <div className="space-y-0.5 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-[11px] font-bold px-1.5 py-0.2 rounded shrink-0 text-cyan-900 bg-cyan-100">
+              {cam.code}
+            </span>
+            <span className="font-bold text-xs text-slate-900 truncate" title={cam.name}>
+              {cam.name}
+            </span>
+            <span
+              className={`text-[10px] font-semibold px-1.5 py-0.2 rounded shrink-0 ${
+                cam.status === '在线'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-200 text-slate-600'
+              }`}
+            >
+              {cam.status}
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-500 truncate" title={cam.location}>
+            {cam.modelCategory ? `${cam.modelCategory} · ${cam.location}` : cam.location}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => handleRemoveDevice(camId, 'camera')}
           className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
           title="解除关联"
         >
@@ -480,8 +601,8 @@ export function ProjectBoardingPointModal({
                         {point.name || '未命名登船点'}
                       </div>
 
-                      <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                        <div className="flex items-center gap-1 font-mono">
+                      <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
+                        <div className="flex items-center gap-1 font-mono flex-wrap">
                           <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 font-semibold">
                             地面 {point.groundDeviceIds.length}
                           </span>
@@ -489,9 +610,14 @@ export function ProjectBoardingPointModal({
                           <span className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-semibold">
                             船上 {point.shipDeviceIds.length}
                           </span>
+                          {(point.cameraAssistEnabled || (point.cameraDeviceIds?.length || 0) > 0) && (
+                            <span className="px-1.5 py-0.2 rounded bg-cyan-50 text-cyan-700 font-semibold">
+                              摄像头 {point.cameraDeviceIds?.length || 0}
+                            </span>
+                          )}
                         </div>
                         <span
-                          className={`text-[10px] font-semibold ${
+                          className={`text-[10px] font-semibold shrink-0 ${
                             isPaired ? 'text-emerald-600' : 'text-amber-600'
                           }`}
                         >
@@ -661,6 +787,61 @@ export function ProjectBoardingPointModal({
                     </div>
                   </div>
                 </div>
+
+                {/* 摄像头辅助点人数配置区 */}
+                <div className="px-4 pb-4">
+                  <div
+                    className={`border rounded-xl p-3.5 bg-white space-y-3 transition-colors ${
+                      activePoint.cameraAssistEnabled ? 'border-cyan-200' : 'border-slate-200'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-1.5">
+                        <Video className="w-4 h-4 text-cyan-600" />
+                        <h5 className="font-bold text-xs text-slate-900">摄像头辅助点人数</h5>
+                        <span className="px-1.5 py-0.2 rounded-full text-[11px] font-bold bg-cyan-100 text-cyan-800 font-mono">
+                          {activePoint.cameraDeviceIds?.length || 0}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(activePoint.cameraAssistEnabled)}
+                            onChange={e =>
+                              updateActivePoint(prev => ({
+                                ...prev,
+                                cameraAssistEnabled: e.target.checked
+                              }))
+                            }
+                            className="w-3.5 h-3.5 accent-cyan-600 rounded cursor-pointer"
+                          />
+                          <span>启用</span>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDevicePicker('camera')}
+                          className="px-2.5 py-1 text-xs bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors flex items-center gap-1 cursor-pointer font-semibold"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>关联设备</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {(activePoint.cameraDeviceIds?.length || 0) > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {activePoint.cameraDeviceIds!.map(camId => renderCameraCard(camId))}
+                      </div>
+                    ) : (
+                      <div className="py-5 text-center border-2 border-dashed border-cyan-200/70 rounded-xl text-slate-400 text-xs">
+                        暂未关联摄像头设备
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="h-full min-h-[240px] flex flex-col items-center justify-center text-slate-400 space-y-2">
@@ -698,7 +879,7 @@ export function ProjectBoardingPointModal({
         </div>
       </div>
 
-      {/* 关联激励器多选弹窗 */}
+      {/* 关联设备多选弹窗（地面/船上激励器 或 摄像头设备） */}
       {pickingSide && activePoint && (
         <div
           className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 p-4"
@@ -710,9 +891,15 @@ export function ProjectBoardingPointModal({
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2 font-bold text-sm text-slate-900">
-                <Radio className="w-4 h-4 text-teal-600" />
+                {pickingSide === 'camera' ? (
+                  <Video className="w-4 h-4 text-cyan-600" />
+                ) : (
+                  <Radio className="w-4 h-4 text-teal-600" />
+                )}
                 <span>
-                  关联【{pickingSide === 'ground' ? '地面点位' : '船上点位'}】激励器
+                  {pickingSide === 'camera'
+                    ? '关联【摄像头辅助点人数】摄像头设备'
+                    : `关联【${pickingSide === 'ground' ? '地面点位' : '船上点位'}】激励器`}
                 </span>
               </div>
               <button
@@ -729,7 +916,11 @@ export function ProjectBoardingPointModal({
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="搜索设备名称、编号或位置"
+                  placeholder={
+                    pickingSide === 'camera'
+                      ? '搜索摄像头名称、编号、识别类型或位置'
+                      : '搜索设备名称、编号或位置'
+                  }
                   value={exciterSearch}
                   onChange={e => setExciterSearch(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -758,79 +949,170 @@ export function ProjectBoardingPointModal({
             </div>
 
             <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
-              {filteredExciterList.map(dev => {
-                const usage = deviceUsageMap.get(dev.id);
-                const isDisabled = !!usage;
-                const isChecked = selectedDeviceIds.includes(dev.id);
+              {pickingSide === 'camera' ? (
+                <>
+                  {filteredCameraList.map(cam => {
+                    const usage = cameraUsageMap.get(cam.id);
+                    const isDisabled = !!usage;
+                    const isChecked = selectedDeviceIds.includes(cam.id);
 
-                let disabledReason = '';
-                if (usage) {
-                  if (usage.pointId === activePoint.id && usage.side === pickingSide) {
-                    disabledReason = '当前已关联';
-                  } else if (usage.pointId === activePoint.id) {
-                    disabledReason = usage.side === 'ground' ? '已关联地面' : '已关联船上';
-                  } else {
-                    disabledReason = `${usage.pointName}占用`;
-                  }
-                }
+                    let disabledReason = '';
+                    if (usage) {
+                      disabledReason =
+                        usage.pointId === activePoint.id
+                          ? '当前已关联'
+                          : `${usage.pointName}占用`;
+                    }
 
-                return (
-                  <div
-                    key={dev.id}
-                    onClick={() => handleToggleDeviceSelect(dev.id, isDisabled)}
-                    className={`p-2.5 flex items-center justify-between gap-2 transition-colors ${
-                      isDisabled
-                        ? 'bg-slate-50/80 cursor-not-allowed opacity-75'
-                        : 'hover:bg-teal-50/40 cursor-pointer'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="shrink-0">
-                        {isDisabled ? (
-                          <Ban className="w-4 h-4 text-slate-300" />
-                        ) : isChecked ? (
-                          <CheckSquare className="w-4 h-4 text-teal-600" />
-                        ) : (
-                          <Square className="w-4 h-4 text-slate-300" />
-                        )}
-                      </div>
+                    return (
+                      <div
+                        key={cam.id}
+                        onClick={() => handleToggleDeviceSelect(cam.id, isDisabled)}
+                        className={`p-2.5 flex items-center justify-between gap-2 transition-colors ${
+                          isDisabled
+                            ? 'bg-slate-50/80 cursor-not-allowed opacity-75'
+                            : 'hover:bg-cyan-50/40 cursor-pointer'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="shrink-0">
+                            {isDisabled ? (
+                              <Ban className="w-4 h-4 text-slate-300" />
+                            ) : isChecked ? (
+                              <CheckSquare className="w-4 h-4 text-cyan-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-300" />
+                            )}
+                          </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-1.5 py-0.2 rounded shrink-0">
-                            {dev.code}
-                          </span>
-                          <span
-                            className={`font-semibold text-xs truncate ${
-                              isDisabled ? 'text-slate-400' : 'text-slate-900'
-                            }`}
-                          >
-                            {dev.name}
-                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-cyan-800 bg-cyan-50 px-1.5 py-0.2 rounded shrink-0">
+                                {cam.code}
+                              </span>
+                              <span
+                                className={`font-semibold text-xs truncate ${
+                                  isDisabled ? 'text-slate-400' : 'text-slate-900'
+                                }`}
+                              >
+                                {cam.name}
+                              </span>
+                              <span
+                                className={`text-[10px] font-semibold px-1.5 py-0.2 rounded shrink-0 ${
+                                  cam.status === '在线'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                {cam.status}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                              {cam.modelCategory
+                                ? `${cam.modelCategory} · ${cam.location}`
+                                : cam.location}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                          {dev.location}
+
+                        <div className="shrink-0 pl-2">
+                          {isDisabled ? (
+                            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500">
+                              {disabledReason}
+                            </span>
+                          ) : isChecked ? (
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-cyan-100 text-cyan-800">
+                              已选
+                            </span>
+                          ) : null}
                         </div>
                       </div>
-                    </div>
+                    );
+                  })}
 
-                    <div className="shrink-0 pl-2">
-                      {isDisabled ? (
-                        <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500">
-                          {disabledReason}
-                        </span>
-                      ) : isChecked ? (
-                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-teal-100 text-teal-800">
-                          已选
-                        </span>
-                      ) : null}
+                  {filteredCameraList.length === 0 && (
+                    <div className="py-10 text-center text-slate-400 text-xs">
+                      未找到匹配摄像头设备
                     </div>
-                  </div>
-                );
-              })}
+                  )}
+                </>
+              ) : (
+                <>
+                  {filteredExciterList.map(dev => {
+                    const usage = deviceUsageMap.get(dev.id);
+                    const isDisabled = !!usage;
+                    const isChecked = selectedDeviceIds.includes(dev.id);
 
-              {filteredExciterList.length === 0 && (
-                <div className="py-10 text-center text-slate-400 text-xs">未找到匹配设备</div>
+                    let disabledReason = '';
+                    if (usage) {
+                      if (usage.pointId === activePoint.id && usage.side === pickingSide) {
+                        disabledReason = '当前已关联';
+                      } else if (usage.pointId === activePoint.id) {
+                        disabledReason = usage.side === 'ground' ? '已关联地面' : '已关联船上';
+                      } else {
+                        disabledReason = `${usage.pointName}占用`;
+                      }
+                    }
+
+                    return (
+                      <div
+                        key={dev.id}
+                        onClick={() => handleToggleDeviceSelect(dev.id, isDisabled)}
+                        className={`p-2.5 flex items-center justify-between gap-2 transition-colors ${
+                          isDisabled
+                            ? 'bg-slate-50/80 cursor-not-allowed opacity-75'
+                            : 'hover:bg-teal-50/40 cursor-pointer'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="shrink-0">
+                            {isDisabled ? (
+                              <Ban className="w-4 h-4 text-slate-300" />
+                            ) : isChecked ? (
+                              <CheckSquare className="w-4 h-4 text-teal-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-300" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-1.5 py-0.2 rounded shrink-0">
+                                {dev.code}
+                              </span>
+                              <span
+                                className={`font-semibold text-xs truncate ${
+                                  isDisabled ? 'text-slate-400' : 'text-slate-900'
+                                }`}
+                              >
+                                {dev.name}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                              {dev.location}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 pl-2">
+                          {isDisabled ? (
+                            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-500">
+                              {disabledReason}
+                            </span>
+                          ) : isChecked ? (
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-teal-100 text-teal-800">
+                              已选
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {filteredExciterList.length === 0 && (
+                    <div className="py-10 text-center text-slate-400 text-xs">未找到匹配设备</div>
+                  )}
+                </>
               )}
             </div>
 

@@ -3789,6 +3789,18 @@
       ["mousemove","touchmove"].forEach(function(ev){
         window.addEventListener(ev, function(){ notifyParentActivity(false); }, { passive: true });
       });
+      if(IS_EXHIBITION){
+        document.addEventListener("click", function(e){
+          var t = e.target;
+          if(!t || !t.closest) return;
+          if(t.closest('button, a, input, select, .card, [data-card], .ov-box, .flip-dd, .ship-item, .proj-item, .modal, .modal-box, .backdrop, .ship-play-bar, #shipPlayBar, [role="button"], [role="option"], tr')) return;
+          try{
+            if(window.parent && window.parent !== window){
+              window.parent.postMessage({ type: "exhibition_toggle_screen_switch" }, "*");
+            }
+          }catch(_e){}
+        }, { passive: true });
+      }
     })();
 
     /* ---------------- 初始化 ---------------- */

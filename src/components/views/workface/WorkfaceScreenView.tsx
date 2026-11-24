@@ -16,7 +16,9 @@ import {
   ArrowLeft, 
   Tv, 
   SlidersHorizontal,
-  LayoutDashboard
+  LayoutDashboard,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 export interface WorkfaceScreenViewProps {
@@ -45,6 +47,37 @@ export function WorkfaceScreenView({
   const [isLoading, setIsLoading] = useState(true);
   const [showExitHint, setShowExitHint] = useState(true);
   const [iframeKey, setIframeKey] = useState<number>(() => Date.now());
+  const [isScreenSwitchOpen, setIsScreenSwitchOpen] = useState(false);
+  const [screenSwitchLastInteractAt, setScreenSwitchLastInteractAt] = useState<number>(0);
+
+  const touchScreenSwitch = useCallback(() => {
+    setScreenSwitchLastInteractAt(Date.now());
+  }, []);
+
+  // 展厅右下角双屏切换栏：无操作 10 秒后自动滑回右下角收起（与驾驶舱一致）
+  useEffect(() => {
+    if (!exhibitionMode || !onSwitchToDashboard || !isScreenSwitchOpen) return;
+    const timer = window.setTimeout(() => {
+      setIsScreenSwitchOpen(false);
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [exhibitionMode, onSwitchToDashboard, isScreenSwitchOpen, screenSwitchLastInteractAt]);
+
+  // 监听 iframe 内部空白区域轻触事件，联动滑出/收起右下角切换栏（与驾驶舱一致）
+  useEffect(() => {
+    if (!exhibitionMode || !onSwitchToDashboard) return;
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'exhibition_toggle_screen_switch') {
+        setIsScreenSwitchOpen(prev => {
+          const next = !prev;
+          if (next) setScreenSwitchLastInteractAt(Date.now());
+          return next;
+        });
+      }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, [exhibitionMode, onSwitchToDashboard]);
 
   const iframeSrc = useMemo(() => {
     const params = new URLSearchParams();
@@ -157,7 +190,7 @@ export function WorkfaceScreenView({
       ref={containerRef}
       className="fixed inset-0 w-screen h-screen z-50 flex flex-col bg-[#00060f] overflow-hidden select-none"
     >
-      {/* 顶部悬浮控制栏：普通模式显示完整返回控制台；展厅双屏切换模式提供大触控热区切换驾驶舱；独立作业看板展示模式不退出大屏 */}
+      {/* 顶部悬浮控制栏：仅普通控制台模式显示；展厅双屏切换统一采用右下角单独滑出，与驾驶舱保持完全一致 */}
       {!exhibitionMode ? (
         <div className="absolute top-3 right-4 z-40 flex items-center gap-2 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-cyan-500/40 shadow-[0_4px_24px_rgba(0,0,0,0.8),0_0_15px_rgba(0,229,255,0.25)] transition-all hover:bg-slate-900/98">
           <div className="flex items-center gap-1.5 pr-2.5 border-r border-slate-700/80">
@@ -218,30 +251,69 @@ export function WorkfaceScreenView({
             <span>返回控制台</span>
           </button>
         </div>
-      ) : (
-        <div className="absolute top-3 right-4 z-40 flex items-center gap-2 bg-[#03152d]/90 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-cyan-400/45 shadow-[0_6px_28px_rgba(0,0,0,0.85),0_0_16px_rgba(0,210,255,0.28)]">
-          {onSwitchToDashboard && (
-            <button
-              type="button"
-              onClick={onSwitchToDashboard}
-              className="flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-xs font-extrabold tracking-wide shadow-[0_0_16px_rgba(0,210,255,0.55)] active:scale-95 transition-all cursor-pointer"
-              title="触摸切换回驾驶舱独立全屏视图"
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>切换驾驶舱</span>
-            </button>
-          )}
-
+      ) : onSwitchToDashboard ? (
+        <>
+          {/* 右下角收起态侧边滑出拉手（仅保留左箭头，与展厅驾驶舱样式及交互完全一致） */}
           <button
             type="button"
-            onClick={handleReload}
-            className="p-2 min-h-[38px] min-w-[38px] flex items-center justify-center text-cyan-200 hover:text-white hover:bg-cyan-500/20 rounded-full transition-colors cursor-pointer"
-            title="刷新大屏数据"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsScreenSwitchOpen(true);
+              touchScreenSwitch();
+            }}
+            className={`fixed bottom-5 right-0 z-50 flex items-center justify-center pl-2.5 pr-2 py-3 rounded-l-full bg-[#041936]/92 hover:bg-[#082b5c] backdrop-blur-xl border-y border-l border-cyan-400/60 text-cyan-100 hover:text-white shadow-[-6px_4px_24px_rgba(0,0,0,0.75),0_0_16px_rgba(0,210,255,0.28)] transition-all duration-300 ease-out cursor-pointer active:scale-95 group ${
+              isScreenSwitchOpen
+                ? 'translate-x-full opacity-0 pointer-events-none'
+                : 'translate-x-0 opacity-100 pointer-events-auto'
+            }`}
+            title="点击展开大屏切换"
           >
-            <RotateCw className="w-4 h-4" />
+            <ChevronLeft className="w-4 h-4 text-[#00d2ff] group-hover:-translate-x-0.5 transition-transform" />
           </button>
-        </div>
-      )}
+
+          {/* 右下角滑出态：驾驶舱 / 作业面大屏切换胶囊（与展厅驾驶舱样式及交互完全一致） */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              touchScreenSwitch();
+            }}
+            onMouseDown={touchScreenSwitch}
+            onTouchStart={touchScreenSwitch}
+            className={`fixed bottom-5 right-4 z-50 transition-all duration-300 ease-out ${
+              isScreenSwitchOpen
+                ? 'translate-x-0 opacity-100 pointer-events-auto'
+                : 'translate-x-[120%] opacity-0 pointer-events-none'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 bg-[#03152d]/95 backdrop-blur-xl p-1.5 rounded-full border border-cyan-400/65 shadow-[0_12px_36px_rgba(0,0,0,0.88),0_0_24px_rgba(0,210,255,0.35)]">
+              <button
+                type="button"
+                onClick={() => {
+                  touchScreenSwitch();
+                  onSwitchToDashboard();
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-cyan-200 hover:text-white hover:bg-cyan-500/20 text-xs font-extrabold tracking-wide active:scale-95 transition-all cursor-pointer"
+                title="触摸切换回驾驶舱独立全屏视图"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5 text-[#00d2ff]" />
+                <span>驾驶舱</span>
+              </button>
+              <span className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-xs font-extrabold tracking-wide shadow-[0_0_14px_rgba(0,210,255,0.55)]">
+                <Tv className="w-3.5 h-3.5" />
+                <span>作业面大屏</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsScreenSwitchOpen(false)}
+                className="w-8 h-8 rounded-full bg-[#0b2447]/80 hover:bg-[#133b6e] border border-[#1f4a7c] hover:border-cyan-400/60 text-[#8ab4f8] hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 active:scale-95 ml-0.5"
+                title="收起至右下角"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       {/* 顶部中央淡入浮动操作指引提示 */}
       {showExitHint && (

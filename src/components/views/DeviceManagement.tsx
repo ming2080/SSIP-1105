@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { MOCK_PROJECTS } from '@/src/data/mockProjects';
 import { getStoredWorkfaces, WorkfaceRecord } from '@/src/data/workfaceData';
-import { syncExcitersToSharedStorage } from '@/src/data/boardingPointData';
+import { syncExcitersToSharedStorage, syncCamerasToSharedStorage } from '@/src/data/boardingPointData';
 
 export type DeviceTab = 'main_station' | 'exciter' | 'gas_detector' | 'alarm' | 'camera';
 
@@ -650,10 +650,14 @@ export function DeviceManagement() {
   const [alarms, setAlarms] = useState<AlarmDevice[]>(initialAlarms);
   const [cameras, setCameras] = useState<CameraDevice[]>(initialCameras);
 
-  // 将激励器列表同步至共享存储，便于船舶项目登船点配置直接关联
+  // 将激励器与摄像头列表同步至共享存储，便于船舶项目登船点配置直接关联
   React.useEffect(() => {
     syncExcitersToSharedStorage(exciters);
   }, [exciters]);
+
+  React.useEffect(() => {
+    syncCamerasToSharedStorage(cameras);
+  }, [cameras]);
 
   // 1. 搜索条件
   const [searchCode, setSearchCode] = useState<string>('');        // 设备编码/SN/设备名称
