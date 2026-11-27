@@ -254,6 +254,7 @@ interface ProjectDashboardConfig {
   bgImage: string;
   totalPersonnel: number;
   onDutyPersonnel: number;
+  unknownPersonnel: number;
   offDutyPersonnel: number;
   alarmPersonnel: number;
   distributionData: { name: string; value: number; max: number }[];
@@ -283,6 +284,7 @@ const projectListConfig: ProjectDashboardConfig[] = [
     bgImage: lngModelBg,
     totalPersonnel: 186,
     onDutyPersonnel: 178,
+    unknownPersonnel: 6,
     offDutyPersonnel: 8,
     alarmPersonnel: 3,
     distributionData: [
@@ -368,6 +370,7 @@ const projectListConfig: ProjectDashboardConfig[] = [
     bgImage: containerModelBg,
     totalPersonnel: 142,
     onDutyPersonnel: 136,
+    unknownPersonnel: 4,
     offDutyPersonnel: 6,
     alarmPersonnel: 2,
     distributionData: [
@@ -450,6 +453,7 @@ const projectListConfig: ProjectDashboardConfig[] = [
     bgImage: tankerModelBg,
     totalPersonnel: 98,
     onDutyPersonnel: 94,
+    unknownPersonnel: 3,
     offDutyPersonnel: 4,
     alarmPersonnel: 1,
     distributionData: [
@@ -529,6 +533,7 @@ const projectListConfig: ProjectDashboardConfig[] = [
     bgImage: bulkModelBg,
     totalPersonnel: 76,
     onDutyPersonnel: 72,
+    unknownPersonnel: 2,
     offDutyPersonnel: 4,
     alarmPersonnel: 2,
     distributionData: [
@@ -607,6 +612,7 @@ const projectListConfig: ProjectDashboardConfig[] = [
     bgImage: containerModelBg,
     totalPersonnel: 115,
     onDutyPersonnel: 108,
+    unknownPersonnel: 5,
     offDutyPersonnel: 7,
     alarmPersonnel: 1,
     distributionData: [
@@ -683,6 +689,7 @@ const projectListConfig: ProjectDashboardConfig[] = [
     bgImage: lngModelBg,
     totalPersonnel: 88,
     onDutyPersonnel: 82,
+    unknownPersonnel: 3,
     offDutyPersonnel: 6,
     alarmPersonnel: 2,
     distributionData: [
@@ -5214,10 +5221,14 @@ export function Dashboard({
                   iconBg: 'bg-emerald-500/30 text-[#00e676] border-emerald-500/40' 
                 },
                 { 
-                  label: '实时在场人数', 
-                  value: `${currentOnDuty} 人`, 
+                  label: '实时在船人数', 
+                  value: `${currentOnDuty + (currentProject.unknownPersonnel || 0)} 人`, 
                   icon: Users,
-                  iconBg: 'bg-blue-600/30 text-[#00d2ff] border-blue-500/40' 
+                  iconBg: 'bg-blue-600/30 text-[#00d2ff] border-blue-500/40',
+                  subMetrics: [
+                    { label: '有标签', value: `${currentOnDuty}人`, dotColor: 'bg-[#00d2ff]', textColor: 'text-[#00d2ff]' },
+                    { label: '无标签', value: `${currentProject.unknownPersonnel || 0}人`, dotColor: 'bg-[#ffb300]', textColor: 'text-[#ffb300]' },
+                  ]
                 },
                 { 
                   label: '安装设备数', 
@@ -5237,7 +5248,13 @@ export function Dashboard({
                   icon: Bell,
                   iconBg: 'bg-red-500/30 text-[#ff1744] border-red-500/40' 
                 },
-              ]).map((item, idx) => (
+              ]).map((item: {
+                label: string;
+                value: string;
+                icon: any;
+                iconBg: string;
+                subMetrics?: { label: string; value: string; dotColor: string; textColor: string }[];
+              }, idx) => (
                 <div key={idx} className="flex flex-col px-3 first:pl-1 last:pr-1 whitespace-nowrap min-w-0">
                   <div className="flex items-center gap-1.5 text-[11px] text-[#8ab4f8] whitespace-nowrap">
                     <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${item.iconBg}`}>
@@ -5249,6 +5266,19 @@ export function Dashboard({
                   <div className="text-base font-bold font-mono text-[#e2f1ff] mt-1 tracking-tight whitespace-nowrap truncate">
                     {item.value}
                   </div>
+
+                  {item.subMetrics && item.subMetrics.length > 0 && (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-tight">
+                      {item.subMetrics.map((sub, sIdx) => (
+                        <span key={sIdx} className="inline-flex items-center gap-1 text-[#8ab4f8] whitespace-nowrap">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sub.dotColor}`} />
+                          <span>
+                            {sub.label} <b className={`font-mono ${sub.textColor}`}>{sub.value}</b>
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

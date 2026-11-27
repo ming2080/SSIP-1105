@@ -20,6 +20,7 @@ const serveYxkjPlugin = () => ({
           for (const p of possiblePaths) {
             if (fs.existsSync(p)) {
               res.setHeader('Content-Type', 'text/html; charset=utf-8');
+              res.setHeader('Cache-Control', 'no-store');
               res.end(fs.readFileSync(p));
               return;
             }

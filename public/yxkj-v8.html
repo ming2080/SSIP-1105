@@ -404,26 +404,60 @@
       .ov-metrics .metric:hover .m-ico img.ov-pic-ico{
         transform:scale(1.04);
       }
-      .ov-metrics .metric .m-right{ display:flex; align-items:baseline; justify-content:flex-end; margin-left:auto; text-align:right; }
+      .ov-metrics .metric .m-right{ display:flex; flex-direction:column; align-items:flex-end; justify-content:center; margin-left:auto; text-align:right; min-width:0; }
       .ov-metrics .metric .num{
         font-family:var(--mono); font-variant-numeric:tabular-nums;
-        font-size:38px; font-weight:800; line-height:1; letter-spacing:1px;
+        font-size:36px; font-weight:800; line-height:1; letter-spacing:1px;
       }
+      .ov-metrics .metric.has-split .num{ font-size:31px; }
+      .ov-metrics .metric .m-main-split{
+        display:none; align-items:center; justify-content:flex-end; gap:6px; margin-top:4px;
+        font-size:11px; font-weight:600; white-space:nowrap;
+      }
+      .ov-metrics .metric.has-split .m-main-split{ display:flex; }
+      .ov-metrics .metric .m-split-chip{
+        display:inline-flex; align-items:center; gap:4px; padding:1px 6px; border-radius:6px;
+        cursor:pointer; transition:background .15s, border-color .15s;
+        background:rgba(4,22,46,.68); border:1px solid rgba(0,180,240,.24);
+      }
+      .ov-metrics .metric .m-split-chip .dot{ width:5px; height:5px; border-radius:50%; flex:none; }
+      .ov-metrics .metric .m-split-chip.tag{ color:#8fe9ff; border-color:rgba(0,229,255,.34); }
+      .ov-metrics .metric .m-split-chip.tag .dot{ background:#00e5ff; box-shadow:0 0 6px #00e5ff; }
+      .ov-metrics .metric .m-split-chip.tag b{ color:#00e5ff; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+      .ov-metrics .metric .m-split-chip.tag:hover{ background:rgba(0,229,255,.16); border-color:rgba(0,229,255,.72); }
+      .ov-metrics .metric .m-split-chip.unk{ color:#ffd580; border-color:rgba(255,176,32,.36); }
+      .ov-metrics .metric .m-split-chip.unk .dot{ background:#ffb020; box-shadow:0 0 6px #ffb020; }
+      .ov-metrics .metric .m-split-chip.unk b{ color:#ffb020; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+      .ov-metrics .metric .m-split-chip.unk:hover{ background:rgba(255,176,32,.18); border-color:rgba(255,176,32,.75); }
       .ov-metrics .metric .tot{
         font-size:18px; color:#b0d6f8; font-weight:800; margin-left:5px;
         font-family:var(--font); letter-spacing:0;
       }
       .m-sub-row{
-        display:flex; align-items:center; justify-content:space-between; gap:8px;
-        margin-top:6px; padding-top:6px; border-top:1px solid rgba(0,190,255,.16);
+        display:flex; align-items:center; justify-content:space-between; gap:6px;
+        margin-top:5px; padding-top:5px; border-top:1px solid rgba(0,190,255,.16);
         font-size:12px; color:#9ec6de; white-space:nowrap;
       }
-      .m-sub-row .m-sub-items{ display:flex; align-items:center; gap:10px; overflow:hidden; text-overflow:ellipsis; }
+      .m-sub-row .m-sub-items{ display:flex; align-items:center; gap:8px; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+      .m-sub-row .m-sub-items.m-sub-single{ gap:4px; font-size:11px; white-space:nowrap; overflow:visible; }
+      .m-sub-row .m-sub-items.m-sub-single b{ margin:0 1px; }
       .m-sub-row b{ color:#ffffff; font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:700; margin:0 2px; }
-      .m-sub-row .m-sub-link{ color:var(--cyan); font-weight:700; font-size:11.5px; flex:none; opacity:.9; }
+      .m-sub-row .m-sub-split{ display:inline-flex; align-items:center; gap:2px; font-size:10.5px; white-space:nowrap; }
+      .m-sub-row .m-sub-tag{ color:#7be6ff; font-size:10.5px; font-weight:600; }
+      .m-sub-row .m-sub-tag b{ color:#00e5ff; }
+      .m-sub-row .m-sub-unk{ color:#ffcf70; font-size:10.5px; font-weight:600; }
+      .m-sub-row .m-sub-unk b{ color:#ffb020; }
+      .m-sub-row .m-sub-link{ color:var(--cyan); font-weight:700; font-size:11.5px; flex:none; opacity:.9; line-height:1.35; }
       .m-sub-row .m-sub-sep{ opacity:.35; }
-      .m-sub-row .m-sub-hit{ cursor:pointer; transition:color .15s; border-radius:4px; padding:1px 3px; margin:-1px -3px; }
+      .m-sub-row .m-sub-hit{ cursor:pointer; transition:color .15s; border-radius:4px; padding:1px 2px; margin:-1px -2px; }
       .m-sub-row .m-sub-hit:hover{ color:#00e5ff; background:rgba(0,229,255,.1); }
+      @media (max-width: 1560px){
+        .m-sub-row .m-sub-items.m-sub-single{ font-size:10px; gap:3px; }
+        .m-sub-row .m-sub-items.m-sub-single .m-sub-split,
+        .m-sub-row .m-sub-items.m-sub-single .m-sub-tag,
+        .m-sub-row .m-sub-items.m-sub-single .m-sub-unk{ font-size:9.5px; }
+        .m-sub-row .m-sub-link{ font-size:10.5px; }
+      }
 
       /* ---------- Overview time controls ---------- */
       .time-ctl-bar{ display:flex; align-items:center; gap:8px; margin-right:10px; }
@@ -703,6 +737,7 @@
       .an-kpi .ak-lab{ font-size:12px; color:var(--muted); }
       .an-kpi .ak-val{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:26px; font-weight:800; color:#fff; }
       .an-kpi .ak-val.c{ color:#00e5ff; } .an-kpi .ak-val.g{ color:#1fe08a; } .an-kpi .ak-val.o{ color:#ffb020; } .an-kpi .ak-val.r{ color:#ff5c74; }
+      .an-kpi .ak-unk-tag{ font-family:var(--font); font-size:12.5px; font-weight:700; color:#ffb020; margin-left:4px; vertical-align:middle; white-space:nowrap; }
       .an-kpi .ak-sub{ font-size:11.5px; color:#8ab4cf; }
       .an-2col{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:14px; margin-bottom:16px; }
       .an-3col{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; margin-bottom:16px; }
@@ -776,68 +811,72 @@
             <span class="ov-live-tag" id="ovLiveTag"><i class="live-dot"></i> <span id="ovLiveTxt">实时物联感知监控中</span></span>
           </div>
           <div class="ov-metrics">
-            <div class="metric c" id="ovBox1" title="点击查看今日/历史登船总人数、在船/下船及按班组/工种分类统计">
+            <div class="metric c has-split" id="ovBox1" title="点击查看当前在船人数、有/无标签拆分、已下船及今日登船总人数统计">
               <div class="m-top">
-                <span class="m-lab" id="ovLab1">今日船上登船总人数</span>
+                <span class="m-lab" id="ovLab1">当前在船人数</span>
                 <span class="m-tag" id="ovTag1">全船受控</span>
               </div>
               <div class="m-bottom">
-                <span class="m-ico" id="ovIco1"><img src="/assets/overview_icons/icon_1_final.png" alt="船上总人数" class="ov-pic-ico" /></span>
+                <span class="m-ico" id="ovIco1"><img src="/assets/overview_icons/icon_1_final.png" alt="当前在船人数" class="ov-pic-ico" /></span>
                 <div class="m-right">
                   <div class="num"><span id="ovNum1">0</span><span class="tot" id="ovTot1"> 人</span></div>
+                  <div class="m-main-split" id="ovSplit1">
+                    <span class="m-split-chip tag"><i class="dot"></i>有标签 <b>0</b>人</span>
+                    <span class="m-split-chip unk"><i class="dot"></i>无标签 <b>0</b>人</span>
+                  </div>
                 </div>
               </div>
               <div class="m-sub-row" id="ovSub1">
-                <span class="m-sub-items">当前在船 <b>0</b> 人 <span class="m-sub-sep">|</span> 已下船 <b>0</b> 人</span>
-                <span class="m-sub-link">明细 ›</span>
+                <span class="m-sub-items">已下船 <b>0</b> 人 <span class="m-sub-sep">|</span> 今日登船总人数 <b>0</b> 人</span>
+                <span class="m-sub-link">分类明细 ›</span>
               </div>
             </div>
-            <div class="metric o" id="ovBox2" title="点击查看今日/历史机舱内人员及已出机舱记录">
+            <div class="metric o" id="ovBox2" title="点击查看当前机舱内人数、已出机舱及今日机舱总人数统计">
               <div class="m-top">
-                <span class="m-lab" id="ovLab2">今日机舱内人员数</span>
+                <span class="m-lab" id="ovLab2">当前机舱内人数</span>
                 <span class="m-tag" id="ovTag2">机舱进出统计</span>
               </div>
               <div class="m-bottom">
-                <span class="m-ico" id="ovIco2"><img src="/assets/overview_icons/icon_2_final.png" alt="机舱内人员数" class="ov-pic-ico" /></span>
+                <span class="m-ico" id="ovIco2"><img src="/assets/overview_icons/icon_2_final.png" alt="当前机舱内人数" class="ov-pic-ico" /></span>
                 <div class="m-right">
                   <div class="num"><span id="ovNum2">0</span><span class="tot" id="ovTot2"> 人</span></div>
                 </div>
               </div>
               <div class="m-sub-row" id="ovSub2">
-                <span class="m-sub-items">当前在机舱 <b>0</b> 人 <span class="m-sub-sep">|</span> 已出机舱 <b>0</b> 人</span>
-                <span class="m-sub-link">明细 ›</span>
+                <span class="m-sub-items">已出机舱 <b>0</b> 人 <span class="m-sub-sep">|</span> 今日机舱总人数 <b>0</b> 人</span>
+                <span class="m-sub-link">机舱明细 ›</span>
               </div>
             </div>
-            <div class="metric b" id="ovBox3" title="点击查看有限空间进出总人数与在舱/进入过人员统计">
+            <div class="metric b" id="ovBox3" title="点击查看当前有限空间人数、已出舱及今日有限空间总人数统计">
               <div class="m-top">
-                <span class="m-lab" id="ovLab3">今日有限空间总人数</span>
+                <span class="m-lab" id="ovLab3">当前有限空间人数</span>
                 <span class="m-tag" id="ovTag3">密闭舱室作业</span>
               </div>
               <div class="m-bottom">
-                <span class="m-ico" id="ovIco3"><img src="/assets/overview_icons/icon_3_final.png" alt="有限空间总人数" class="ov-pic-ico" /></span>
+                <span class="m-ico" id="ovIco3"><img src="/assets/overview_icons/icon_3_final.png" alt="当前有限空间人数" class="ov-pic-ico" /></span>
                 <div class="m-right">
                   <div class="num"><span id="ovNum3">0</span><span class="tot" id="ovTot3"> 人</span></div>
                 </div>
               </div>
               <div class="m-sub-row" id="ovSub3">
-                <span class="m-sub-items">当前在舱 <b>0</b> 人 <span class="m-sub-sep">|</span> 进入过(已出) <b>0</b> 人</span>
-                <span class="m-sub-link">明细 ›</span>
+                <span class="m-sub-items">已出舱 <b>0</b> 人 <span class="m-sub-sep">|</span> 今日有限空间总人数 <b>0</b> 人</span>
+                <span class="m-sub-link">进出明细 ›</span>
               </div>
             </div>
-            <div class="metric g" id="ovBox4" title="点击查看今日/历史有作业过的有限空间及进舱清单">
+            <div class="metric g" id="ovBox4" title="点击查看当前有限空间进舱数、已出舱室及今日进舱总舱数清单">
               <div class="m-top">
-                <span class="m-lab" id="ovLab4">今日有限空间进舱数/总数</span>
+                <span class="m-lab" id="ovLab4">当前有限空间进舱数/总数</span>
                 <span class="m-tag" id="ovTag4">进舱统计</span>
               </div>
               <div class="m-bottom">
-                <span class="m-ico" id="ovIco4"><img src="/assets/overview_icons/icon_4_final.png" alt="有限空间进舱数/总数" class="ov-pic-ico" /></span>
+                <span class="m-ico" id="ovIco4"><img src="/assets/overview_icons/icon_4_final.png" alt="当前有限空间进舱数/总数" class="ov-pic-ico" /></span>
                 <div class="m-right">
                   <div class="num"><span id="ovNum4">0</span><span class="tot" id="ovTot4"> / 20 舱</span></div>
                 </div>
               </div>
               <div class="m-sub-row" id="ovSub4">
-                <span class="m-sub-items">当前在舱 <b>0</b> 舱 <span class="m-sub-sep">|</span> 今日作业过 <b>0</b> 舱</span>
-                <span class="m-sub-link">清单 ›</span>
+                <span class="m-sub-items">已出舱室 <b>0</b> 舱 <span class="m-sub-sep">|</span> 今日进舱总舱数 <b>0</b> 舱</span>
+                <span class="m-sub-link">舱室清单 ›</span>
               </div>
             </div>
           </div>
@@ -1054,6 +1093,7 @@
       { code:"项目 A", name:"15万吨散货船", en:"150K DWT BULK CARRIER · HULL BC-150-01", tag:"散货船",
         berthType:"slipway", berthName:"平船台",
         desc:"双层底压载舱、艏尖隔舱、大舱合拢搭载",
+        unknownCount: 4,
         ov:{ w:96, wt:180, d:31, dt:40, at:16 },
         confined:[
           {n:"NO.1 压载舱", e:"Ballast Tank No.1", lim:9},
@@ -1074,6 +1114,7 @@
       { code:"项目 A", name:"大型集装箱船", en:"24,000 TEU CONTAINER SHIP · HULL CS-240-02", tag:"集装箱船",
         berthType:"pier", berthName:"1号码头（新码头）",
         desc:"24,000 TEU · 部署 1号码头（新码头）舾装调试",
+        unknownCount: 6,
         ov:{ w:128, wt:200, d:36, dt:42, at:18 },
         confined:[
           {n:"NO.3 压载舱", e:"Balast Tank No.3", lim:12, fixed:{entered:6, working:4}, gas:{o2:20.8, co:0, h2s:0, lel:0}, fan:"run", temp:24.3, light:"正常"},
@@ -1094,6 +1135,7 @@
       { code:"项目 B", name:"17.4万m³ LNG运输船", en:"174,000 m³ LNG CARRIER · HULL LNG-174-01", tag:"LNG船",
         berthType:"slipway", berthName:"2万吨船台",
         desc:"薄膜型 NO.96 绝热液货舱、次屏蔽层、低温惰化氮气机房",
+        unknownCount: 5,
         ov:{ w:84, wt:160, d:33, dt:44, at:15 },
         confined:[
           {n:"NO.96 绝热液货舱", e:"NO.96 Insulated Cargo Tank", lim:12},
@@ -1114,6 +1156,7 @@
       { code:"项目 C", name:"30万吨级原油船（VLCC）", en:"300K DWT VLCC · HULL OC-300-01", tag:"VLCC",
         berthType:"pier", berthName:"3号码头（旧码头）",
         desc:"货油密闭舱、洗舱间 · 部署 3号码头（旧码头）水下舾装",
+        unknownCount: 3,
         ov:{ w:112, wt:190, d:34, dt:41, at:17 },
         confined:[
           {n:"货油密闭舱", e:"Cargo Oil Tank", lim:10, warn:"co"},
@@ -1134,6 +1177,7 @@
       { code:"项目 D", name:"18,500 DWT 绿色油化船", en:"18,500 DWT CHEMICAL TANKER · HULL CHEM-185", tag:"油化船",
         berthType:"pier", berthName:"4号码头（浮动码头）",
         desc:"特种化学品货舱、管系试压 · 部署 4号码头（浮动码头）",
+        unknownCount: 4,
         ov:{ w:76, wt:140, d:28, dt:36, at:14 },
         confined:[
           {n:"NO.1 化学品货舱", e:"Chemical Tank No.1", lim:8},
@@ -2516,10 +2560,42 @@
         });
       });
 
-      /* 1.1 船上总人数拆解 */
+      /* 1.1 船上总人数拆解（船舶今日实时模式叠加登船口未知人员总数） */
+      var unknownOnboard = (!isYard && includeCurrentLive && PROJECTS[state.proj] && typeof PROJECTS[state.proj].unknownCount === "number")
+        ? PROJECTS[state.proj].unknownCount
+        : 0;
+      for(var uIdx = 1; uIdx <= unknownOnboard; uIdx++){
+        boardedWorkers.push({
+          id: "未佩戴标签",
+          name: "未知人员 #" + pad(uIdx),
+          team: "未知人员",
+          trade: "未知人员",
+          spaceName: "登船梯口摄像头辅助区",
+          cabinStatus: "未识别进船",
+          isCurrentlyOnboard: true,
+          isUnknown: true,
+          isCurrentlyInConfined: false,
+          visitedConfined: false,
+          isCurrentlyInER: false,
+          wentEngineRoom: false,
+          hasApproval: true,
+          permitCode: "-",
+          entryTimeStr: "实时监测中",
+          exitTimeStr: "在岗中",
+          stayMins: 15 + uIdx * 7,
+          statusText: "未知人员(在船)"
+        });
+      }
+
       var boardedTotal = boardedWorkers.length;
       var onboardCurrent = 0;
-      boardedWorkers.forEach(function(w){ if(w.isCurrentlyOnboard) onboardCurrent++; });
+      var taggedOnboard = 0;
+      boardedWorkers.forEach(function(w){
+        if(w.isCurrentlyOnboard){
+          onboardCurrent++;
+          if(!w.isUnknown) taggedOnboard++;
+        }
+      });
       var disembarkedCount = boardedTotal - onboardCurrent;
 
       /* 1.2 机舱内人员拆解 */
@@ -2575,6 +2651,8 @@
         boardedWorkers: boardedWorkers,
         boardedTotal: boardedTotal,
         onboardCurrent: onboardCurrent,
+        taggedOnboard: taggedOnboard,
+        unknownOnboard: unknownOnboard,
         disembarkedCount: disembarkedCount,
         erWorkers: erWorkers,
         erTotal: erTotal,
@@ -2615,43 +2693,47 @@
       }
 
       var m;
+      var isTodayMode = (state.timeMode === "today");
       if(isShip){
-        var entryRatio = snap.totalConfCount ? Math.round(snap.workedConfCount / snap.totalConfCount * 100) : 0;
+        var activeConfCount = isTodayMode ? countEntered(snap.confSpaces) : 0;
+        var exitedConfCount = Math.max(0, snap.workedConfCount - activeConfCount);
+        var activeRatio = snap.totalConfCount ? Math.round(activeConfCount / snap.totalConfCount * 100) : 0;
         m = [
           {
             ico: OV_ICONS.crew,
-            lab: tl + "船上登船总人数",
-            num: snap.boardedTotal,
+            lab: isTodayMode ? "当前在船人数" : (tl + "在船人数"),
+            num: snap.onboardCurrent,
             tot: " 人",
-            tag: state.timeMode === "today" ? "全船受控" : "历史台账",
-            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="boarded" data-filter="CUR">当前在船 <b>'+snap.onboardCurrent+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="boarded" data-filter="EXITED">已下船 <b>'+snap.disembarkedCount+'</b> 人</span></span><span class="m-sub-link" data-drill="boarded" data-filter="ALL">分类明细 ›</span>',
-            cls: "c"
+            tag: isTodayMode ? "全船受控" : "历史台账",
+            splitHtml: '<span class="m-split-chip tag" data-drill="boarded" data-filter="TAG"><i class="dot"></i>有标签 <b>'+snap.taggedOnboard+'</b>人</span><span class="m-split-chip unk" data-drill="boarded" data-filter="UNK"><i class="dot"></i>无标签 <b>'+snap.unknownOnboard+'</b>人</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="boarded" data-filter="EXITED">已下船 <b>'+snap.disembarkedCount+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="boarded" data-filter="ALL">'+tl+'登船总人数 <b>'+snap.boardedTotal+'</b> 人</span></span><span class="m-sub-link" data-drill="boarded" data-filter="ALL">分类明细 ›</span>',
+            cls: "c has-split"
           },
           {
             ico: OV_ICONS.dense,
-            lab: tl + "机舱内人员数",
-            num: snap.erTotal,
+            lab: isTodayMode ? "当前机舱内人数" : (tl + "机舱内人数"),
+            num: snap.erCurrent,
             tot: " 人",
             tag: "机舱进出统计",
-            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="engine" data-filter="CUR">当前在机舱 <b>'+snap.erCurrent+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="engine" data-filter="EXITED">已出机舱 <b>'+snap.erExited+'</b> 人</span></span><span class="m-sub-link" data-drill="engine" data-filter="ALL">机舱明细 ›</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="engine" data-filter="EXITED">已出机舱 <b>'+snap.erExited+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="engine" data-filter="ALL">'+tl+'机舱总人数 <b>'+snap.erTotal+'</b> 人</span></span><span class="m-sub-link" data-drill="engine" data-filter="ALL">机舱明细 ›</span>',
             cls: "o"
           },
           {
             ico: OV_ICONS.group,
-            lab: tl + "有限空间总人数",
-            num: snap.confTotal,
+            lab: isTodayMode ? "当前有限空间人数" : (tl + "有限空间人数"),
+            num: snap.confCurrent,
             tot: " 人",
             tag: "密闭舱室作业",
-            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="confined" data-view="crew" data-filter="CUR">当前在舱 <b>'+snap.confCurrent+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="confined" data-view="crew" data-filter="EXITED">进入过(已出) <b>'+snap.confExited+'</b> 人</span></span><span class="m-sub-link" data-drill="confined" data-view="crew" data-filter="ALL">进出明细 ›</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="confined" data-view="crew" data-filter="EXITED">已出舱 <b>'+snap.confExited+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="confined" data-view="crew" data-filter="ALL">'+tl+'有限空间总人数 <b>'+snap.confTotal+'</b> 人</span></span><span class="m-sub-link" data-drill="confined" data-view="crew" data-filter="ALL">进出明细 ›</span>',
             cls: "b"
           },
           {
             ico: OV_ICONS.door,
-            lab: tl + "有限空间进舱数/总数",
-            num: snap.workedConfCount,
+            lab: isTodayMode ? "当前有限空间进舱数/总数" : (tl + "有限空间进舱数/总数"),
+            num: activeConfCount,
             tot: " / " + snap.totalConfCount + " 舱",
-            tag: "作业率 " + entryRatio + "%",
-            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="confined" data-view="spaces" data-filter="ACTIVE">当前有人 <b>'+countEntered(snap.confSpaces)+'</b> 舱</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="confined" data-view="crew" data-filter="ALL">总进舱 <b>'+snap.confTotal+'</b> 人</span></span><span class="m-sub-link" data-drill="confined" data-view="spaces" data-filter="ALL">舱室清单 ›</span>',
+            tag: "作业率 " + activeRatio + "%",
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="confined" data-view="spaces" data-filter="EXITED_SPACES">已出舱室 <b>'+exitedConfCount+'</b> 舱</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="confined" data-view="spaces" data-filter="WORKED">'+tl+'进舱总舱数 <b>'+snap.workedConfCount+'</b> 舱</span></span><span class="m-sub-link" data-drill="confined" data-view="spaces" data-filter="ALL">舱室清单 ›</span>',
             cls: "g"
           }
         ];
@@ -2661,45 +2743,48 @@
         wf.forEach(function(s){
           (s.historyRecords || []).forEach(function(rec){ if(rec.isToday) wfTodayTotal++; });
         });
+        var wfExited = Math.max(0, wfTodayTotal - wfPpl);
         var enteredWf = countEntered(wf);
         var totalWf = wf.length || 16;
         var wfRatio = totalWf ? Math.round(enteredWf / totalWf * 100) : 0;
         var isAllYard = (state.proj === YARD_ALL_IDX);
+        var erYardTotal = snap.erTotal || Math.round(snap.boardedTotal * 0.28);
+        var erYardExited = Math.max(0, erYardTotal - snap.erCurrent);
         m = [
           {
             ico: YARD_ICONS.yard_total,
-            lab: tl + (isAllYard ? "全厂出勤总人数" : "厂区出勤总人数"),
-            num: snap.boardedTotal,
+            lab: isTodayMode ? (isAllYard ? "全厂当前在岗人数" : "厂区当前在岗人数") : (tl + (isAllYard ? "全厂在岗人数" : "厂区在岗人数")),
+            num: snap.onboardCurrent,
             tot: " 人",
             tag: isAllYard ? "全厂汇总" : getProjName(state.proj),
-            subHtml: '<span class="m-sub-items">当前在岗 <b>'+snap.onboardCurrent+'</b> 人</span><span class="m-sub-link">分类明细 ›</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="boarded" data-filter="EXITED">已离岗 <b>'+snap.disembarkedCount+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="boarded" data-filter="ALL">'+tl+(isAllYard ? "全厂出勤总人数" : "厂区出勤总人数")+' <b>'+snap.boardedTotal+'</b> 人</span></span><span class="m-sub-link" data-drill="boarded" data-filter="ALL">分类明细 ›</span>',
             cls: "c"
           },
           {
             ico: YARD_ICONS.yard_cumulative,
-            lab: tl + "重点/机舱动火作业人数",
-            num: snap.erTotal || Math.round(snap.boardedTotal * 0.28),
+            lab: isTodayMode ? "当前重点工区人数" : (tl + "重点工区人数"),
+            num: snap.erCurrent,
             tot: " 人",
             tag: isAllYard ? "全厂重点工区" : "重点工区统计",
-            subHtml: '<span class="m-sub-items">当前在岗 <b>'+snap.erCurrent+'</b> 人</span><span class="m-sub-link">明细 ›</span>',
+            subHtml: '<span class="m-sub-items"><span class="m-sub-hit" data-drill="engine" data-filter="EXITED">已离岗 <b>'+erYardExited+'</b> 人</span> <span class="m-sub-sep">|</span> <span class="m-sub-hit" data-drill="engine" data-filter="ALL">'+tl+'重点作业总人数 <b>'+erYardTotal+'</b> 人</span></span><span class="m-sub-link" data-drill="engine" data-filter="ALL">明细 ›</span>',
             cls: "o"
           },
           {
             ico: YARD_ICONS.yard_active_field,
-            lab: tl + "作业总人数",
-            num: wfTodayTotal,
+            lab: isTodayMode ? "当前作业面人数" : (tl + "作业面人数"),
+            num: wfPpl,
             tot: " 人",
             tag: isAllYard ? "全厂作业面" : "作业面人员",
-            subHtml: '<span class="m-sub-items">当前在岗 <b>'+wfPpl+'</b> 人</span><span class="m-sub-link">明细 ›</span>',
+            subHtml: '<span class="m-sub-items">已离岗 <b>'+wfExited+'</b> 人 <span class="m-sub-sep">|</span> '+tl+'作业总人数 <b>'+wfTodayTotal+'</b> 人</span><span class="m-sub-link">明细 ›</span>',
             cls: "b"
           },
           {
             ico: YARD_ICONS.yard_zones_active,
-            lab: tl + "区域开工数/总数",
+            lab: isTodayMode ? "当前区域开工数/总数" : (tl + "区域开工数/总数"),
             num: enteredWf,
             tot: " / " + totalWf + " 处",
             tag: "开工率 " + wfRatio + "%",
-            subHtml: '<span class="m-sub-items">当前在岗 <b>'+wfPpl+'</b> 人</span><span class="m-sub-link">清单 ›</span>',
+            subHtml: '<span class="m-sub-items">当前在岗 <b>'+wfPpl+'</b> 人 <span class="m-sub-sep">|</span> '+tl+'累计作业 <b>'+wfTodayTotal+'</b> 人</span><span class="m-sub-link">清单 ›</span>',
             cls: "g"
           }
         ];
@@ -2716,11 +2801,26 @@
         var elTot = document.getElementById("ovTot" + n);
         var elTag = document.getElementById("ovTag" + n);
         var elSub = document.getElementById("ovSub" + n);
+        var elSplit = document.getElementById("ovSplit" + n);
         if(elIco) elIco.innerHTML = m[i].ico;
         if(elLab) elLab.textContent = m[i].lab;
         if(elNum) elNum.textContent = m[i].num;
         if(elTot) elTot.textContent = m[i].tot;
         if(elTag) elTag.textContent = m[i].tag;
+        if(elSplit){
+          elSplit.innerHTML = m[i].splitHtml || "";
+          if(m[i].splitHtml){
+            Array.prototype.forEach.call(elSplit.querySelectorAll("[data-drill]"), function(hit){
+              hit.addEventListener("click", function(e){
+                e.stopPropagation();
+                var tab = hit.getAttribute("data-drill");
+                var flt = hit.getAttribute("data-filter") || "ALL";
+                var vw = hit.getAttribute("data-view");
+                openAnalyticsModal(tab, { filter: flt, viewMode: vw });
+              });
+            });
+          }
+        }
         if(elSub){
           elSub.innerHTML = m[i].subHtml;
           Array.prototype.forEach.call(elSub.querySelectorAll("[data-drill]"), function(hit){
@@ -2831,11 +2931,11 @@
     var tabCabinCrew = document.getElementById("tabCabinCrew");
     if(tabCabinCrew) tabCabinCrew.addEventListener("click", function(){ switchMode("cabincrew"); });
 
-    /* 4个数据概览卡片点击下钻对应分析弹窗 */
-    document.getElementById("ovBox1").addEventListener("click", function(){ openAnalyticsModal("boarded", { filter: "ALL" }); });
-    document.getElementById("ovBox2").addEventListener("click", function(){ openAnalyticsModal("engine", { filter: "ALL" }); });
-    document.getElementById("ovBox3").addEventListener("click", function(){ openAnalyticsModal("confined", { viewMode: "crew", filter: "ALL" }); });
-    document.getElementById("ovBox4").addEventListener("click", function(){ openAnalyticsModal("confined", { viewMode: "spaces", filter: "ALL" }); });
+    /* 4个数据概览卡片点击下钻对应分析弹窗（主数据均为当前实时状态，默认聚焦当前在船/在岗） */
+    document.getElementById("ovBox1").addEventListener("click", function(){ openAnalyticsModal("boarded", { filter: "CUR" }); });
+    document.getElementById("ovBox2").addEventListener("click", function(){ openAnalyticsModal("engine", { filter: "CUR" }); });
+    document.getElementById("ovBox3").addEventListener("click", function(){ openAnalyticsModal("confined", { viewMode: "crew", filter: "CUR" }); });
+    document.getElementById("ovBox4").addEventListener("click", function(){ openAnalyticsModal("confined", { viewMode: "spaces", filter: "ACTIVE" }); });
 
     function refreshAllForTimeChange(){
       if(state.mode !== "cabincrew"){
@@ -3336,14 +3436,16 @@
         } else {
           var filteredBoarded = snap.boardedWorkers.filter(function(w){
             if(state.boardedFilter === "CUR") return w.isCurrentlyOnboard;
+            if(state.boardedFilter === "TAG") return w.isCurrentlyOnboard && !w.isUnknown;
+            if(state.boardedFilter === "UNK") return !!w.isUnknown;
             if(state.boardedFilter === "EXITED") return !w.isCurrentlyOnboard;
             return true;
           });
           var html = '<div class="an-kpi-row">'
             + '<div class="an-kpi"><span class="ak-lab">'+snap.timeLabel+'施工总人数</span><span class="ak-val c">'+snap.boardedTotal+' 人</span><span class="ak-sub">当前在船 + 已下船合计</span></div>'
-            + '<div class="an-kpi"><span class="ak-lab">当前在船人数</span><span class="ak-val g">'+snap.onboardCurrent+' 人</span><span class="ak-sub">实时定位在船受控人员</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">当前在船人数</span><span class="ak-val g">'+snap.onboardCurrent+' 人<span class="ak-unk-tag">（有标签：'+snap.taggedOnboard+'人 / 无标签：'+snap.unknownOnboard+'人）</span></span><span class="ak-sub">有标签：'+snap.taggedOnboard+' 人 · 无标签：'+snap.unknownOnboard+' 人</span></div>'
             + '<div class="an-kpi"><span class="ak-lab">已下船人数</span><span class="ak-val o">'+snap.disembarkedCount+' 人</span><span class="ak-sub">已完成班次签退下船</span></div>'
-            + '<div class="an-kpi"><span class="ak-lab">作业班组与工种覆盖</span><span class="ak-val">'+snap.byTeam.filter(function(x){return x.total>0;}).length+' 班组</span><span class="ak-sub">覆盖 '+snap.byTrade.filter(function(x){return x.total>0;}).length+' 个作业工种</span></div>'
+            + '<div class="an-kpi"><span class="ak-lab">作业班组与工种覆盖</span><span class="ak-val">'+snap.byTeam.filter(function(x){return x.total>0 && x.name!=="未知人员";}).length+' 班组</span><span class="ak-sub">覆盖 '+snap.byTrade.filter(function(x){return x.total>0 && x.name!=="未知人员";}).length+' 个作业工种</span></div>'
             + '</div>';
           html += '<div class="an-2col">'
             + '<div class="an-card"><h5><span>按施工班组统计</span><span>合计 '+snap.boardedTotal+' 人</span></h5>'+renderMiniBars(snap.byTeam, TEAM_COLORS, false)+'</div>'
@@ -3351,14 +3453,18 @@
             + '</div>';
           html += '<div class="an-filter-bar">'
             + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="ALL"?" active":"")+'" data-bfilter="ALL">全部登船人员 ('+snap.boardedTotal+')</button>'
-            + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="CUR"?" active":"")+'" data-bfilter="CUR">当前在船 ('+snap.onboardCurrent+')</button>'
+            + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="CUR"?" active":"")+'" data-bfilter="CUR">当前在船 ('+snap.onboardCurrent+' · 有标签:'+snap.taggedOnboard+' / 无标签:'+snap.unknownOnboard+')</button>'
+            + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="TAG"?" active":"")+'" data-bfilter="TAG">有标签 ('+snap.taggedOnboard+')</button>'
+            + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="UNK"?" active":"")+'" data-bfilter="UNK">无标签 ('+snap.unknownOnboard+')</button>'
             + '<button type="button" class="an-filter-btn'+(state.boardedFilter==="EXITED"?" active":"")+'" data-bfilter="EXITED">已下船明细 ('+snap.disembarkedCount+')</button>'
             + '</div>';
           html += '<div class="crew-wrap" style="max-height:260px"><table class="crew-table"><thead><tr>'
             + '<th>工号</th><th>姓名</th><th>施工班组</th><th>工种</th><th>所在/作业空间</th><th>进船/入舱时间</th><th>下船/离开时间</th><th>当前状态</th>'
             + '</tr></thead><tbody>'
             + (filteredBoarded.length ? filteredBoarded.map(function(w){
-                var stBadge = w.isCurrentlyOnboard ? '<span class="permit-chip ok">当前在船</span>' : '<span class="permit-chip warn">已下船</span>';
+                var stBadge = w.isUnknown
+                  ? '<span class="permit-chip warn">未知(无标签)</span>'
+                  : (w.isCurrentlyOnboard ? '<span class="permit-chip ok">当前在船</span>' : '<span class="permit-chip warn">已下船</span>');
                 return '<tr><td class="c-id">'+w.id+'</td><td class="c-name">'+w.name+'</td><td>'+w.team+'</td><td>'+w.trade+'</td>'
                   + '<td>'+w.spaceName+'</td><td class="c-time">'+w.entryTimeStr+'</td><td class="c-time">'+w.exitTimeStr+'</td><td>'+stBadge+'</td></tr>';
               }).join("") : '<tr><td colspan="8" class="empty-note">当前筛选条件下暂无登船人员记录。</td></tr>')
@@ -3510,16 +3616,19 @@
                 }).join("") : '<tr><td colspan="8" class="empty-note">当前筛选条件下暂无有限空间进出人员记录。</td></tr>')
               + '</tbody></table></div>';
           } else {
+            var exitedSpacesCount = Math.max(0, snap.workedConfCount - activeConfCount);
             var filteredSpaces = cSpaces.filter(function(s){
               if(state.confFilter === "WORKED") return !!workedSet[(s.deptName || "") + "::" + s.name];
               if(state.confFilter === "ACTIVE") return s.entered > 0;
+              if(state.confFilter === "EXITED_SPACES") return !!workedSet[(s.deptName || "") + "::" + s.name] && s.entered === 0;
               if(state.confFilter === "UNAPPROVED") return !!(s.unapprovedCurrent || s.unapprovedHistoryCount > 0);
               return true;
             });
             cHtml += '<div class="an-filter-bar">'
               + '<button type="button" class="an-filter-btn'+(state.confFilter==="ALL"?" active":"")+'" data-cfilter="ALL">全部有限空间 ('+cSpaces.length+')</button>'
-              + '<button type="button" class="an-filter-btn'+(state.confFilter==="WORKED"?" active":"")+'" data-cfilter="WORKED">'+snap.timeLabel+'进舱作业过 ('+snap.workedConfCount+')</button>'
               + '<button type="button" class="an-filter-btn'+(state.confFilter==="ACTIVE"?" active":"")+'" data-cfilter="ACTIVE">当前有人在舱 ('+activeConfCount+')</button>'
+              + '<button type="button" class="an-filter-btn'+(state.confFilter==="EXITED_SPACES"?" active":"")+'" data-cfilter="EXITED_SPACES">已出舱室 ('+exitedSpacesCount+')</button>'
+              + '<button type="button" class="an-filter-btn'+(state.confFilter==="WORKED"?" active":"")+'" data-cfilter="WORKED">'+snap.timeLabel+'进舱总舱数 ('+snap.workedConfCount+')</button>'
               + '<button type="button" class="an-filter-btn'+(state.confFilter==="UNAPPROVED"?" active":"")+'" data-cfilter="UNAPPROVED">无审批进入警示 ('+unappSpaceCount+')</button>'
               + '</div>';
             cHtml += '<div class="crew-wrap" style="max-height:310px"><table class="crew-table"><thead><tr>'
